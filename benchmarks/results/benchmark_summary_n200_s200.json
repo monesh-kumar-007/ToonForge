@@ -1,0 +1,114 @@
+{
+  "metadata": {
+    "title": "Adaptive Structure-Aware Routing for LLM Context Serialization",
+    "timestamp": "2026-09-04T11:31:25.284009+00:00",
+    "corpus_size": 200,
+    "random_seed": 200,
+    "total_duration_seconds": 0.79
+  },
+  "strategies": [
+    {
+      "strategy": "JSON",
+      "mean_reduction_pct": 0.0,
+      "median_reduction_pct": 0.0,
+      "std_reduction_pct": 0.0,
+      "validity_rate": 1.0,
+      "fallback_rate": 0.0,
+      "mean_latency_ms": 0.055,
+      "routing_grade": "BASELINE",
+      "sample_count": 200
+    },
+    {
+      "strategy": "Compact JSON",
+      "mean_reduction_pct": 40.47,
+      "median_reduction_pct": 41.88,
+      "std_reduction_pct": 5.34,
+      "validity_rate": 1.0,
+      "fallback_rate": 0.0,
+      "mean_latency_ms": 0.045,
+      "routing_grade": "OPTIMAL LEADER",
+      "sample_count": 200
+    },
+    {
+      "strategy": "TOON",
+      "mean_reduction_pct": 12.69,
+      "median_reduction_pct": 0.0,
+      "std_reduction_pct": 25.44,
+      "validity_rate": 0.2,
+      "fallback_rate": 0.8,
+      "mean_latency_ms": 0.082,
+      "routing_grade": "HIGH DEFECT",
+      "sample_count": 200
+    },
+    {
+      "strategy": "JTON",
+      "mean_reduction_pct": 12.21,
+      "median_reduction_pct": 0.0,
+      "std_reduction_pct": 24.49,
+      "validity_rate": 0.2,
+      "fallback_rate": 0.8,
+      "mean_latency_ms": 0.053,
+      "routing_grade": "HIGH DEFECT",
+      "sample_count": 200
+    },
+    {
+      "strategy": "ONTO",
+      "mean_reduction_pct": 2.53,
+      "median_reduction_pct": 0.0,
+      "std_reduction_pct": 10.6,
+      "validity_rate": 0.4,
+      "fallback_rate": 0.6,
+      "mean_latency_ms": 0.161,
+      "routing_grade": "HIGH DEFECT",
+      "sample_count": 200
+    },
+    {
+      "strategy": "Adaptive Router",
+      "mean_reduction_pct": 46.26,
+      "median_reduction_pct": 42.66,
+      "std_reduction_pct": 9.68,
+      "validity_rate": 1.0,
+      "fallback_rate": 0.0,
+      "mean_latency_ms": 2.544,
+      "routing_grade": "OPTIMAL LEADER",
+      "sample_count": 200
+    }
+  ],
+  "categories": {
+    "flat_tabular": {
+      "sample_count": 40,
+      "mean_adaptive_savings_pct": 63.43,
+      "format_distribution": {
+        "TOON": 40
+      }
+    },
+    "nested_objects": {
+      "sample_count": 40,
+      "mean_adaptive_savings_pct": 41.99,
+      "format_distribution": {
+        "Compact JSON": 40
+      }
+    },
+    "deep_nested": {
+      "sample_count": 40,
+      "mean_adaptive_savings_pct": 42.71,
+      "format_distribution": {
+        "Compact JSON": 40
+      }
+    },
+    "heterogeneous": {
+      "sample_count": 40,
+      "mean_adaptive_savings_pct": 48.48,
+      "format_distribution": {
+        "Compact JSON": 40
+      }
+    },
+    "key_sparse": {
+      "sample_count": 40,
+      "mean_adaptive_savings_pct": 34.7,
+      "format_distribution": {
+        "Compact JSON": 40
+      }
+    }
+  }
+}
