@@ -24,13 +24,15 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from apps.api.serializers.serialization_manager import SerializationManager
+from apps.api.services.validator import validator, StrictValidator
 
 
 class DownstreamRetrievabilityProxy:
     """Simulates LLM context retrieval on serialized structured text representations."""
 
-    def __init__(self):
+    def __init__(self, validator_instance: StrictValidator | None = None):
         self.manager = SerializationManager()
+        self.validator = validator_instance or validator
 
     def generate_retrieval_queries(self, payload: Any) -> list[dict[str, Any]]:
         """Extract ground-truth probe queries from a payload."""
@@ -95,16 +97,44 @@ class DownstreamRetrievabilityProxy:
         format_scores = {}
 
         for cand in candidates:
-            if not cand.eligible or not cand.encoded or not cand.valid:
+            # 1. Ineligible candidate
+            if not cand.eligible:
                 format_scores[cand.format_id] = {
-                    "eligible": cand.eligible,
-                    "valid": cand.valid,
+                    "eligible": False,
+                    "valid": False,
                     "retrieval_rate": 0.0,
                     "total_queries": len(queries),
                     "successful_queries": 0,
                 }
                 continue
 
+            # 2. Serialization or decoding failure
+            if not cand.encoded or cand.decoded is None:
+                cand.valid = False
+                format_scores[cand.format_id] = {
+                    "eligible": True,
+                    "valid": False,
+                    "retrieval_rate": 0.0,
+                    "total_queries": len(queries),
+                    "successful_queries": 0,
+                }
+                continue
+
+            # 3. Strict semantic round-trip validation
+            is_valid, _ = self.validator.validate(payload, cand.decoded)
+            cand.valid = is_valid
+
+            if not is_valid:
+                format_scores[cand.format_id] = {
+                    "eligible": True,
+                    "valid": False,
+                    "retrieval_rate": 0.0,
+                    "total_queries": len(queries),
+                    "successful_queries": 0,
+                }
+                continue
+
+            # 4. Calculate retrievability only for candidates that pass strict validation
             hits = sum(1 for q in queries if self.evaluate_retrieval(cand.encoded, q))
             format_scores[cand.format_id] = {
                 "eligible": True,

@@ -53,13 +53,22 @@ def _flatten(obj: Any, prefix: str = "") -> list[tuple[str, Any]]:
 
 def _unflatten(pairs: list[tuple[str, Any]]) -> Any:
     """Reconstruct nested object from (path, leaf_value) pairs."""
-    root: dict = {}
+    if not pairs:
+        return {}
+    if pairs[0][0] == "":
+        return pairs[0][1]
+
+    first_keys = _parse_path(pairs[0][0])
+    if not first_keys:
+        return pairs[0][1]
+
+    root: Any = [] if isinstance(first_keys[0], int) else {}
 
     for path, value in pairs:
         _set_nested(root, path, value)
 
     # If root has exactly one key that is "__root__", unwrap it
-    if list(root.keys()) == ["__root__"]:
+    if isinstance(root, dict) and list(root.keys()) == ["__root__"]:
         return root["__root__"]
     return root
 
@@ -89,7 +98,7 @@ def _parse_path(path: str) -> list[Any]:
     return parts
 
 
-def _set_nested(root: dict, path: str, value: Any) -> None:
+def _set_nested(root: Any, path: str, value: Any) -> None:
     """Set value in nested dict/list structure according to path."""
     keys = _parse_path(path)
     if not keys:

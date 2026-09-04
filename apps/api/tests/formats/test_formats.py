@@ -73,3 +73,144 @@ def test_onto_format_nested(nested_dict):
         enc = fmt.encode(nested_dict)
         dec = fmt.decode(enc)
         assert dec == nested_dict
+
+
+def test_onto_root_dictionary():
+    """TEST 1: Existing Root Dictionary Compatibility."""
+    from apps.api.services.validator import validator
+    fmt = ONTOFormat()
+    payload = {
+        "system": {
+            "service": {
+                "name": "toonforge"
+            }
+        }
+    }
+    el, _ = fmt.is_eligible(payload)
+    assert el is True
+    enc = fmt.encode(payload)
+    dec = fmt.decode(enc)
+    valid, reason = validator.validate(payload, dec)
+    assert valid is True, f"Validation failed: {reason}"
+
+
+def test_onto_root_array_of_objects():
+    """TEST 2: Root Array of Objects reconstructs as a list."""
+    from apps.api.services.validator import validator
+    fmt = ONTOFormat()
+    payload = [
+        {"id": 1, "name": "Alice"},
+        {"id": 2, "name": "Bob"},
+    ]
+    encoded_text = 'ONTO\n[0].id|1\n[0].name|"Alice"\n[1].id|2\n[1].name|"Bob"'
+    dec = fmt.decode(encoded_text)
+    assert isinstance(dec, list)
+    assert len(dec) == 2
+    valid, reason = validator.validate(payload, dec)
+    assert valid is True, f"Validation failed: {reason}"
+
+
+def test_onto_deep_root_array():
+    """TEST 3: Deep Root Array with depth >= 3 round-trips with StrictValidator."""
+    from apps.api.services.validator import validator
+    fmt = ONTOFormat()
+    payload = [
+        {
+            "user": {
+                "profile": {
+                    "name": "Alice",
+                    "settings": {"theme": "dark"}
+                }
+            }
+        },
+        {
+            "user": {
+                "profile": {
+                    "name": "Bob",
+                    "settings": {"theme": "light"}
+                }
+            }
+        }
+    ]
+    el, _ = fmt.is_eligible(payload)
+    assert el is True
+    enc = fmt.encode(payload)
+    dec = fmt.decode(enc)
+    assert isinstance(dec, list)
+    valid, reason = validator.validate(payload, dec)
+    assert valid is True, f"Validation failed: {reason}"
+
+
+def test_onto_nested_array_object_transition():
+    """TEST 4: Nested Array/Object Transition."""
+    from apps.api.services.validator import validator
+    fmt = ONTOFormat()
+    payload = {
+        "teams": [
+            {
+                "members": [
+                    {"id": 1},
+                    {"id": 2}
+                ]
+            }
+        ]
+    }
+    el, _ = fmt.is_eligible(payload)
+    assert el is True
+    enc = fmt.encode(payload)
+    dec = fmt.decode(enc)
+    valid, reason = validator.validate(payload, dec)
+    assert valid is True, f"Validation failed: {reason}"
+
+
+def test_onto_array_of_arrays():
+    """TEST 5: Array of Arrays preserves exact list nesting."""
+    from apps.api.services.validator import validator
+    fmt = ONTOFormat()
+    # Depth 3 array of arrays is eligible
+    payload = [
+        [[1, 2], [3, 4]],
+        [[5, 6], [7, 8]]
+    ]
+    el, _ = fmt.is_eligible(payload)
+    assert el is True
+    enc = fmt.encode(payload)
+    dec = fmt.decode(enc)
+    assert isinstance(dec, list)
+    valid, reason = validator.validate(payload, dec)
+    assert valid is True, f"Validation failed: {reason}"
+
+
+def test_onto_type_fidelity():
+    """TEST 6: Type Fidelity preserves distinct types without coercion."""
+    from apps.api.services.validator import validator
+    fmt = ONTOFormat()
+    payload = [
+        {
+            "level1": {
+                "level2": {
+                    "num_str": "00123",
+                    "num": 123,
+                    "b_true": True,
+                    "str_true": "true",
+                    "n_null": None,
+                    "str_null": "null"
+                }
+            }
+        }
+    ]
+    el, _ = fmt.is_eligible(payload)
+    assert el is True
+    enc = fmt.encode(payload)
+    dec = fmt.decode(enc)
+    valid, reason = validator.validate(payload, dec)
+    assert valid is True, f"Validation failed: {reason}"
+
+    # Verify type tags explicitly
+    dec_obj = dec[0]["level1"]["level2"]
+    assert dec_obj["num_str"] == "00123" and isinstance(dec_obj["num_str"], str)
+    assert dec_obj["num"] == 123 and isinstance(dec_obj["num"], int) and not isinstance(dec_obj["num"], bool)
+    assert dec_obj["b_true"] is True and isinstance(dec_obj["b_true"], bool)
+    assert dec_obj["str_true"] == "true" and isinstance(dec_obj["str_true"], str)
+    assert dec_obj["n_null"] is None
+    assert dec_obj["str_null"] == "null" and isinstance(dec_obj["str_null"], str)
