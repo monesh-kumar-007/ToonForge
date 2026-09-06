@@ -128,9 +128,16 @@ Canonical experiment definition:
 | Top-1 / exact-match agreement | 100.0% | 100.0% |
 | Mean / median / p95 token regret | 0.0 / 0.0 / 0.0 | 0.0 / 0.0 / 0.0 |
 | Invalid / ineligible / rejected / fallback | 0.0 / 0.0 / 0.0 / 0.0 | 0.0 / 0.0 / 0.0 / 0.0 |
-| Exhaustive latency (measured) | ~2.24 ms | ~1.67 ms |
-| Learned latency (measured) | ~0.58 ms | ~0.04 ms |
-| Speedup (observed) | ~3.9× | ~(1.7–2.2 ms)/(0.04–0.6 ms) |
+| Exhaustive latency (measured, across Step 7–8 runs) | ~2.2–2.4 ms | ~1.7 ms / ~2.7 ms |
+| Learned latency (measured, across Step 7–8 runs) | ~0.58–0.74 ms | ~0.04 / ~0.15 ms (in-process) |
+| Speedup (observed, across runs) | ~3.2–3.9× | ~17.7× (in-process timing only) |
+
+Measured observations used for the ranges above (Step 7 env, Python 3.14.2):
+Step-8 CLI run — exhaustive 2.38 ms, learned 0.74 ms, **3.2×**; Step-8 API run —
+exhaustive 2.669 ms, learned 0.151 ms in-process. Note the API figure is
+**prediction-only in-process timing** and not directly comparable to the CLI
+full decision-timing basis; report latency per-run and never across altered
+timing bases.
 
 Limitations:
 - The CLI positional split is **not category-stratified** and falls entirely on
@@ -181,3 +188,51 @@ Nondeterministic / timing-dependent (report as ranges, never bit-for-bit):
 - `mean_latency_ms` per strategy
 - benchmark total duration
 - any wall-clock measurement
+
+---
+
+## Step 8 — Final Independent Evaluation
+
+Independent release audit of the frozen commit `1142e7b`, executed against the
+committed code without any source changes. **Verdict: APPROVED WITH
+NON-BLOCKING LIMITATIONS** — the repository can be finalized as the V1 research
+artifact; the limitation list is maintained in `docs/limitations.md` and does
+not block release.
+
+### Phase results (all observed, all reproducible)
+
+| Phase | Check | Result |
+|:---|:---|:---|
+| B — Tests (working env) | `pytest apps/api/tests/` | **46 passed**, 1 warning (Starlette deprecation), exit 0 |
+| B — Tests (fresh venv) | `pytest apps/api/tests/` on Python 3.14 venv from `requirements.txt` | **46 passed**, 3 warnings (Starlette deprecation + 2× sklearn `InconsistentVersionWarning`), exit 0 |
+| C — Reproducibility | two independent CLI runs to temp dirs | all **deterministic fields identical**; only latency/duration vary; run1 == run2 == committed `benchmark_summary_n200_s200.json` |
+| C2 — Category verification | per-category × per-format valid-only re-computation | every §4 expectation reproduced (incl. flat→TOON 63.43, JTON rejected 40/40 on key-sparse, ONTO −8.12 on deep) |
+| D — CLI/API parity | `POST /api/benchmark {"corpus_size":200,"seed":200}` (run `run_d85861d8_seed200`) | **0 strategy mismatches, 0 category mismatches** (all 14 deterministic fields × 6 strategies); API stop verified, pkl reverted |
+| E — Learned router | `learned_router_eval.py` + artifact metrics | depth-1 stump, 2 leaves, `tabular_score` importance 1.0, agreement 1.0, training 150; 100% tie-aware / 0 regret / 0 invalid / 0 fallback on the 50-sample holdout; no leakage (index-disjoint splits; internal train split is metric-only) |
+| F — Claim sweep | regex over all repo text | only HISTORICAL hits — legacy `12.69%`/`12.21%`/`80%` inside the labelled "Correction history" note; **zero stale claim numbers** in experiment-facing content |
+| G — Clean env | fresh venv (Python 3.14, pip 25.3) | install OK; import smoke OK; focused subset 35 passed; full suite 46 passed |
+
+### Verified environment
+
+| Component | Working env (documented) | Fresh venv (resolved by floor pins, Step 8) |
+|:---|:---|---:|
+| Python | 3.14.2 | 3.14.2 |
+| tiktoken | 0.13.0 | 0.14.0 |
+| scikit-learn | 1.8.0 | 1.9.0 |
+| pytest | 9.1.1 | 9.1.1 |
+| fastapi / uvicorn | (docs env) | 0.141.1 / 0.52.4 |
+| pandas | declared, unused | 3.0.5 (still unused) |
+
+Deterministic outputs reproduce across both environments; the differences
+confirm that requirements are **floor pins** and that only the documented
+reset (aligned the methodology above) pins the exact research run.
+
+### Non-blocking limitations (documented in `docs/limitations.md`)
+
+1. `docker-compose.yml` references `Dockerfile`s that do not exist in the repo
+   (validate via the native `uvicorn`/`npm` path).
+2. Dependency and Python versions are floor/unpinned; token counts are
+   pinned-tokenizer dependent.
+3. The committed `learned_router.pkl` is sklearn-1.8.0-trained and warns under
+   sklearn ≥ 1.9 before retrain.
+4. `pandas` is declared but never imported.

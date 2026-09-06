@@ -11,7 +11,7 @@ TOONFORGE is a full-stack research prototype evaluating dynamic serialization st
 - **Structural Profiler**: 19-dimensional topological feature vector extractor
 - **Strict Validator**: Byte-level and type-exact semantic validation preventing silent data corruption
 - **Exhaustive Router**: Validates all eligible candidates and selects minimal token cost
-- **Learned Router**: Decision tree approximation achieving ~3.6–3.9× speedup with 100% agreement on the deterministic evaluation corpus
+- **Learned Router**: Decision tree approximation achieving ≈3.2–3.9× speedup (observed, run/machine-dependent) with 100% agreement on the deterministic evaluation corpus
 - **Benchmark Engine**: Deterministic corpus generator ($N=200$, seed=200) across 5 structural categories
 
 ---
@@ -90,3 +90,44 @@ python benchmarks/adversarial_cases.py
   to `o200k_base`.
 - No Python linter is configured — verification is `pytest` + the canonical
   benchmark run (`--size 200 --seed 200`).
+- `apps/api/requirements.txt` uses **floor pins** (`>=`), not exact versions. A
+  fresh `pip install` on Python 3.14 resolves newer versions (tiktoken 0.14.0,
+  scikit-learn 1.9.0, pandas 3.0.5) than the documented env; deterministic
+  benchmark outputs reproduce across them, but token counts are
+  pinned-tokenizer dependent.
+- `apps/api/models/learned_router.pkl` was trained under scikit-learn 1.8.0;
+  loading it with a newer sklearn prints `InconsistentVersionWarning`. Retrain
+  (test suite / router eval) or match the sklearn version before trusting the
+  binary.
+- `docker-compose.yml` references `apps/api/Dockerfile` + `apps/web/Dockerfile`,
+  which are **not present** in the repo; the validated runtime path is the
+  `uvicorn` + `npm run dev`/`npm run build` commands above.
+
+---
+
+## Final Evaluation Status (Step 8)
+
+An independent final evaluation of the frozen commit (`1142e7b`) was completed
+and recorded in [`docs/benchmark_methodology.md`](docs/benchmark_methodology.md)
+("Step 8 — Final Independent Evaluation").
+
+- **Verdict: APPROVED WITH NON-BLOCKING LIMITATIONS** — safe to finalize the V1
+  research artifact. Limitations (version pinning, missing Dockerfiles for
+  Docker Compose, sklearn-version-sensitive `learned_router.pkl`) are
+  documented in [`docs/limitations.md`](docs/limitations.md) and do not block
+  release.
+- **46/46 backend tests pass** in the working environment *and* in a fresh venv
+  built from `apps/api/requirements.txt` (Python 3.14).
+- Canonical benchmark (N=200, seed=200) reproduces **bit-for-bit** across runs
+  and matches the committed
+  `benchmarks/results/benchmark_summary_n200_s200.json`: Adaptive Router
+  **46.26%** / 100% validity / **0% fallback** vs best universally-valid fixed
+  baseline Compact JSON **40.47%** (Δ **+5.79 pp**).
+- **CLI ↔ API parity: 0 mismatches** across all deterministic strategy and
+  category fields.
+- Learned router: depth-1 stump on `tabular_score`, 100% tie-aware agreement on
+  the deterministic holdout (CLI 150/50; API 160/40, seed 42), 0 token regret,
+  0 invalid, 0 fallback.
+- Latency/speedup are run-dependent: the CLI router speedup measured **3.2×**
+  (2.38 ms → 0.74 ms) on the evaluation run (earlier runs up to ~3.9×); API
+  in-process decision timing ~0.151 ms vs ~2.67 ms exhaustive.
