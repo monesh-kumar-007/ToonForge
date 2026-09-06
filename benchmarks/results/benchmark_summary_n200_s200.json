@@ -1,10 +1,10 @@
 {
   "metadata": {
     "title": "Adaptive Structure-Aware Routing for LLM Context Serialization",
-    "timestamp": "2026-09-04T11:31:25.284009+00:00",
+    "timestamp": "2026-09-05T08:53:01.144673+00:00",
     "corpus_size": 200,
     "random_seed": 200,
-    "total_duration_seconds": 0.79
+    "total_duration_seconds": 0.78
   },
   "strategies": [
     {
@@ -13,10 +13,16 @@
       "median_reduction_pct": 0.0,
       "std_reduction_pct": 0.0,
       "validity_rate": 1.0,
+      "ineligibility_rate": 0.0,
+      "rejection_rate": 0.0,
       "fallback_rate": 0.0,
       "mean_latency_ms": 0.055,
       "routing_grade": "BASELINE",
-      "sample_count": 200
+      "sample_count": 200,
+      "valid_count": 200,
+      "ineligible_count": 0,
+      "rejected_count": 0,
+      "final_fallback_count": 0
     },
     {
       "strategy": "Compact JSON",
@@ -24,43 +30,67 @@
       "median_reduction_pct": 41.88,
       "std_reduction_pct": 5.34,
       "validity_rate": 1.0,
+      "ineligibility_rate": 0.0,
+      "rejection_rate": 0.0,
       "fallback_rate": 0.0,
-      "mean_latency_ms": 0.045,
+      "mean_latency_ms": 0.043,
       "routing_grade": "OPTIMAL LEADER",
-      "sample_count": 200
+      "sample_count": 200,
+      "valid_count": 200,
+      "ineligible_count": 0,
+      "rejected_count": 0,
+      "final_fallback_count": 0
     },
     {
       "strategy": "TOON",
-      "mean_reduction_pct": 12.69,
-      "median_reduction_pct": 0.0,
-      "std_reduction_pct": 25.44,
+      "mean_reduction_pct": 63.43,
+      "median_reduction_pct": 63.67,
+      "std_reduction_pct": 0.79,
       "validity_rate": 0.2,
-      "fallback_rate": 0.8,
-      "mean_latency_ms": 0.082,
-      "routing_grade": "HIGH DEFECT",
-      "sample_count": 200
+      "ineligibility_rate": 0.8,
+      "rejection_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_latency_ms": 0.072,
+      "routing_grade": "OPTIMAL LEADER",
+      "sample_count": 200,
+      "valid_count": 40,
+      "ineligible_count": 160,
+      "rejected_count": 0,
+      "final_fallback_count": 0
     },
     {
       "strategy": "JTON",
-      "mean_reduction_pct": 12.21,
-      "median_reduction_pct": 0.0,
-      "std_reduction_pct": 24.49,
+      "mean_reduction_pct": 61.06,
+      "median_reduction_pct": 61.45,
+      "std_reduction_pct": 1.28,
       "validity_rate": 0.2,
-      "fallback_rate": 0.8,
-      "mean_latency_ms": 0.053,
-      "routing_grade": "HIGH DEFECT",
-      "sample_count": 200
+      "ineligibility_rate": 0.6,
+      "rejection_rate": 0.2,
+      "fallback_rate": 0.0,
+      "mean_latency_ms": 0.049,
+      "routing_grade": "OPTIMAL LEADER",
+      "sample_count": 200,
+      "valid_count": 40,
+      "ineligible_count": 120,
+      "rejected_count": 40,
+      "final_fallback_count": 0
     },
     {
       "strategy": "ONTO",
-      "mean_reduction_pct": 2.53,
-      "median_reduction_pct": 0.0,
-      "std_reduction_pct": 10.6,
-      "validity_rate": 0.4,
-      "fallback_rate": 0.6,
-      "mean_latency_ms": 0.161,
-      "routing_grade": "HIGH DEFECT",
-      "sample_count": 200
+      "mean_reduction_pct": 4.27,
+      "median_reduction_pct": 1.96,
+      "std_reduction_pct": 13.56,
+      "validity_rate": 0.6,
+      "ineligibility_rate": 0.4,
+      "rejection_rate": 0.0,
+      "fallback_rate": 0.0,
+      "mean_latency_ms": 0.183,
+      "routing_grade": "BASELINE",
+      "sample_count": 200,
+      "valid_count": 120,
+      "ineligible_count": 80,
+      "rejected_count": 0,
+      "final_fallback_count": 0
     },
     {
       "strategy": "Adaptive Router",
@@ -68,10 +98,16 @@
       "median_reduction_pct": 42.66,
       "std_reduction_pct": 9.68,
       "validity_rate": 1.0,
+      "ineligibility_rate": 0.0,
+      "rejection_rate": 0.0,
       "fallback_rate": 0.0,
-      "mean_latency_ms": 2.544,
+      "mean_latency_ms": 2.546,
       "routing_grade": "OPTIMAL LEADER",
-      "sample_count": 200
+      "sample_count": 200,
+      "valid_count": 200,
+      "ineligible_count": 0,
+      "rejected_count": 0,
+      "final_fallback_count": 0
     }
   ],
   "categories": {

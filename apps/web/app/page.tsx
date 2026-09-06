@@ -1,525 +1,482 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { MetricCard } from '@/components/common/MetricCard';
-import { routePayload, RouteResponse } from '@/lib/api';
+import React, { useState } from 'react';
 
-const SAMPLE_PAYLOAD = [
-  { id: 'REC_1042', user_id: 'USR_8819', action: 'read', region: 'us-east-1', latency_ms: 12.4, status: 200, cached: true },
-  { id: 'REC_1043', user_id: 'USR_4120', action: 'write', region: 'eu-west-1', latency_ms: 45.1, status: 201, cached: false },
-  { id: 'REC_1044', user_id: 'USR_7731', action: 'query', region: 'us-west-2', latency_ms: 8.9, status: 200, cached: true },
-  { id: 'REC_1045', user_id: 'USR_9002', action: 'sync', region: 'ap-northeast', latency_ms: 110.2, status: 200, cached: false },
+interface Telemetry {
+  id: string;
+  depth: number;
+  hom: string;
+  valids: string;
+  winner: string;
+  latency: string;
+}
+
+const MOCK_PAYLOADS: Telemetry[] = [
+  { id: '#2041_SYNTH', depth: 4, hom: '0.88', valids: '4/5', winner: 'COMPACT JSON (-38.2%)', latency: '1.12ms' },
+  { id: '#3092_TABLE', depth: 2, hom: '0.96', valids: '5/5', winner: 'JTON (-44.1%)', latency: '0.84ms' },
+  { id: '#4110_NESTED', depth: 7, hom: '0.34', valids: '3/5', winner: 'ONTO (-29.8%)', latency: '1.67ms' },
+  { id: '#5019_EDGE', depth: 1, hom: '0.12', valids: '5/5', winner: 'TOON (-18.4%)', latency: '0.62ms' },
 ];
 
 export default function OverviewPage() {
-  const [routeData, setRouteData] = useState<RouteResponse | null>(null);
-  const [simulating, setSimulating] = useState<boolean>(false);
-  const [activeStep, setActiveStep] = useState<number>(4);
+  const [telemetry, setTelemetry] = useState<Telemetry>(MOCK_PAYLOADS[0]);
 
-  const runSimulation = async () => {
-    setSimulating(true);
-    try {
-      const data = await routePayload(SAMPLE_PAYLOAD);
-      setRouteData(data);
-    } catch (err) {
-      console.error('Simulation error:', err);
-    } finally {
-      setSimulating(false);
-    }
+  const runAnimation = () => {
+    const nodes = document.querySelectorAll<HTMLElement>('.pipeline-node');
+    nodes.forEach((node) => {
+      node.classList.remove('ring-2', 'ring-secondary', 'bg-surface-container-highest');
+    });
+
+    nodes.forEach((node, idx) => {
+      window.setTimeout(() => {
+        node.classList.add('bg-surface-container-highest');
+        window.setTimeout(() => {
+          if (idx !== 3) {
+            node.classList.remove('bg-surface-container-highest');
+          }
+        }, 350);
+      }, idx * 160);
+    });
+
+    setTelemetry((prev: Telemetry) => {
+      const next = MOCK_PAYLOADS[(MOCK_PAYLOADS.indexOf(prev) + 1) % MOCK_PAYLOADS.length];
+      window.setTimeout(() => setTelemetry(next), 6 * 160);
+      return prev;
+    });
   };
 
-  useEffect(() => {
-    runSimulation();
-  }, []);
-
   return (
-    <div className="flex flex-col w-full pb-16">
-      {/* Top Context Subheader */}
-      <section className="relative px-8 pt-8 pb-6 bg-surface-container-lowest border-b border-outline-variant/20">
+    <div className="flex flex-col w-full">
+      {/* Top Utility Context Bar / Subheader */}
+      <section className="relative px-space-lg pt-space-lg pb-space-md bg-surface-container-lowest">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-secondary/5 to-transparent pointer-events-none" />
-        <div className="relative flex flex-col md:flex-row md:items-end justify-between gap-4 max-w-7xl mx-auto">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] uppercase text-secondary tracking-widest font-semibold">
-                RESEARCH LAB CONSOLE
-              </span>
-              <span className="text-outline-variant font-mono text-xs">::</span>
-              <span className="font-mono text-xs text-outline">
-                ADAPTIVE_CONTEXT_SERIALIZATION_V1
-              </span>
+        <div className="relative flex flex-col md:flex-row md:items-end justify-between gap-space-md max-w-7xl mx-auto">
+          <div className="flex flex-col gap-space-2xs">
+            <div className="flex items-center gap-space-xs">
+              <span className="font-label-caps text-label-caps uppercase text-secondary tracking-widest">RESEARCH LAB CONSOLE</span>
+              <span className="text-outline-variant font-mono-data-sm text-mono-data-sm">::</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">SYS_DIAGNOSTICS_RUNNING</span>
             </div>
-            <h1 className="font-headline text-3xl text-on-surface font-bold tracking-tight">
-              Adaptive Context Engine
-            </h1>
-            <p className="font-sans text-sm text-on-surface-variant max-w-3xl leading-relaxed">
-              Adaptive Structure-Aware Routing for LLM Context Serialization: An Implemented and
-              Empirically Benchmarked Architecture Unifying JSON, TOON, JTON, and ONTO.
+            <h1 className="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight">Adaptive Context Engine</h1>
+            <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+              Intelligent structural serialization for efficient and reliable LLM context utilization.
             </p>
           </div>
-          <div className="flex items-center gap-3 self-start md:self-auto">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/30">
+          <div className="flex items-center gap-space-sm self-start md:self-auto">
+            <div className="flex items-center gap-space-xs px-space-sm py-1.5 rounded-full bg-surface-container-high shadow-sm">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-secondary" />
               </span>
-              <span className="font-mono text-[11px] text-on-surface font-semibold tracking-wider uppercase">
-                VALIDATION ACTIVE
-              </span>
+              <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold tracking-wider uppercase">VALIDATION ACTIVE</span>
               <span className="text-outline-variant">|</span>
-              <span className="font-mono text-[11px] text-secondary">AESTHETIC_V1.0</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-secondary">AESTHETIC_V2.4</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Metric Cards (4 Grid) */}
-      <section className="px-8 py-6 max-w-7xl mx-auto w-full">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            label="COMPRESSION DELTA"
-            value="46.3%"
-            unit="avg"
-            title="Mean Token Reduction"
-            subtitle="vs Canonical JSON"
-            badge="OPT-63% TOON"
-            icon="trending_down"
-            gradient="cyan"
-          />
-          <MetricCard
-            label="PIPELINE DIALECTS"
-            value="5"
-            unit="formats"
-            title="Serialization Candidates"
-            subtitle="JSON · Compact · TOON · JTON · ONTO"
-            icon="alt_route"
-            gradient="blue"
-          />
-          <MetricCard
-            label="ROUTER CONVERGENCE"
-            value="100%"
-            unit="acc"
-            title="Learned Router Agreement"
-            subtitle="vs Ground Truth Exhaustive"
-            badge="<0.6ms"
-            icon="neurology"
-            gradient="purple"
-          />
-          <MetricCard
-            label="INTEGRITY ASSURANCE"
-            value="0"
-            unit="faults"
-            title="Data Corruptions Prevented"
-            subtitle="Strict round-trip isomorphism"
-            badge="100% SAFE"
-            icon="verified_user"
-            gradient="emerald"
-          />
+      {/* Metric Callouts (4 Grid) */}
+      <section className="px-space-lg py-space-lg max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+          {/* Card 1 */}
+          <div className="group relative p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-all duration-200 shadow-md">
+            <div className="flex items-center justify-between mb-space-xs">
+              <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">COMPRESSION DELTA</span>
+              <span className="material-symbols-outlined text-secondary text-[18px]">trending_down</span>
+            </div>
+            <div className="flex items-baseline gap-space-2xs mb-space-3xs">
+              <span className="font-headline-xl text-headline-xl text-on-surface font-bold">46.26%</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-secondary font-semibold">avg</span>
+            </div>
+            <p className="font-body-md text-body-md text-on-surface font-medium">Mean Token Reduction</p>
+            <div className="mt-space-2xs flex items-center justify-between">
+              <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">vs Plain JSON</span>
+              <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-highest text-secondary-fixed font-mono">OPT-94%</span>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-xl bg-gradient-to-r from-secondary via-primary to-transparent opacity-80" />
+          </div>
+
+          {/* Card 2 */}
+          <div className="group relative p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-all duration-200 shadow-md">
+            <div className="flex items-center justify-between mb-space-xs">
+              <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">PIPELINE DIALECTS</span>
+              <span className="material-symbols-outlined text-primary text-[18px]">alt_route</span>
+            </div>
+            <div className="flex items-baseline gap-space-2xs mb-space-3xs">
+              <span className="font-headline-xl text-headline-xl text-on-surface font-bold">5</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-primary font-semibold">dialects</span>
+            </div>
+            <p className="font-body-md text-body-md text-on-surface font-medium">Serialization Formats</p>
+            <div className="mt-space-2xs flex items-center justify-between">
+              <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant truncate">JSON → Compact → TOON → JTON → ONTO</span>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-xl bg-gradient-to-r from-primary via-tertiary to-transparent opacity-80" />
+          </div>
+
+          {/* Card 3 */}
+          <div className="group relative p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-all duration-200 shadow-md">
+            <div className="flex items-center justify-between mb-space-xs">
+              <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">ROUTER CONVERGENCE</span>
+              <span className="material-symbols-outlined text-secondary text-[18px]">neurology</span>
+            </div>
+            <div className="flex items-baseline gap-space-2xs mb-space-3xs">
+              <span className="font-headline-xl text-headline-xl text-on-surface font-bold">100.0%</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-secondary font-semibold">acc</span>
+            </div>
+            <p className="font-body-md text-body-md text-on-surface font-medium">Learned Router Agreement</p>
+            <div className="mt-space-2xs flex items-center justify-between">
+              <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">vs Exhaustive Router</span>
+              <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-highest text-secondary font-mono">&lt;1.8ms</span>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-xl bg-gradient-to-r from-secondary-fixed via-secondary to-transparent opacity-80" />
+          </div>
+
+          {/* Card 4 */}
+          <div className="group relative p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-all duration-200 shadow-md">
+            <div className="flex items-center justify-between mb-space-xs">
+              <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">INTEGRITY ASSURANCE</span>
+              <span className="material-symbols-outlined text-secondary-fixed-dim text-[18px]">verified_user</span>
+            </div>
+            <div className="flex items-baseline gap-space-2xs mb-space-3xs">
+              <span className="font-headline-xl text-headline-xl text-on-surface font-bold">0</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-secondary-fixed-dim font-semibold">faults</span>
+            </div>
+            <p className="font-body-md text-body-md text-on-surface font-medium">Final Fallbacks Triggered</p>
+            <div className="mt-space-2xs flex items-center justify-between">
+              <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Across benchmark corpus</span>
+              <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-high text-secondary font-mono">100% SAFE</span>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-b-xl bg-gradient-to-r from-secondary via-secondary-fixed to-transparent opacity-80" />
+          </div>
         </div>
       </section>
 
       {/* Interactive Pipeline Section */}
-      <section className="px-8 py-4 max-w-7xl mx-auto w-full">
-        <div className="rounded-xl bg-surface-container-low p-6 shadow-xl relative overflow-hidden border border-outline-variant/20">
-          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
+      <section className="px-space-lg py-space-md max-w-7xl mx-auto w-full">
+        <div className="rounded-xl bg-surface-container-low p-space-lg shadow-xl relative overflow-hidden">
+          {/* Background Graphic Micro-grid */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#adc6ff_1px,transparent_1px)] [background-size:16px_16px]" />
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-space-sm mb-space-lg">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-space-2xs mb-space-3xs">
                 <span className="h-2 w-2 rounded-full bg-secondary animate-pulse" />
-                <span className="font-mono text-[10px] text-secondary uppercase tracking-widest font-semibold">
-                  ARCHITECTURE SCHEMATIC
-                </span>
+                <span className="font-label-caps text-label-caps text-secondary uppercase tracking-widest">ARCHITECTURE SCHEMATIC</span>
               </div>
-              <h2 className="font-headline text-xl text-on-surface font-semibold">
-                How the Engine Works
-              </h2>
+              <h2 className="font-headline-lg text-headline-lg text-on-surface">How the Engine Works</h2>
             </div>
-            <div className="flex items-center gap-3 font-mono text-xs text-outline">
-              <span className="px-2.5 py-1 rounded bg-surface-container-highest text-on-surface">
-                Interactive Trace Mode
-              </span>
+            <div className="flex items-center gap-space-xs font-mono-data-sm text-mono-data-sm text-outline">
+              <span className="px-2 py-1 rounded bg-surface-container-highest text-on-surface">Interactive Trace Mode</span>
               <button
-                onClick={runSimulation}
-                disabled={simulating}
-                className="px-3 py-1.5 rounded bg-primary text-on-primary font-semibold hover:bg-primary-container transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                onClick={runAnimation}
+                className="px-2 py-1 rounded bg-primary text-on-primary font-semibold hover:bg-primary-container hover:text-on-primary-container transition-colors flex items-center gap-1"
               >
-                <span className="material-symbols-outlined text-[16px]">refresh</span>
-                <span>{simulating ? 'Routing...' : 'Run Simulation'}</span>
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                Run Simulation
               </button>
             </div>
           </div>
 
-          {/* 6-Step Horizontal Pipeline */}
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-stretch">
-            {/* Step 1 */}
-            <div
-              onClick={() => setActiveStep(1)}
-              className={`flex flex-col p-3.5 rounded-lg bg-surface-container transition-all cursor-pointer border ${
-                activeStep === 1
-                  ? 'border-secondary bg-surface-container-high ring-1 ring-secondary/50'
-                  : 'border-outline-variant/20 hover:bg-surface-container-high'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline">
-                  01
-                </span>
+          {/* Horizontal Connected Pipeline Flow */}
+          <div className="relative grid grid-cols-1 md:grid-cols-6 gap-space-sm items-stretch">
+            {/* Step 1: Ingest Payload */}
+            <div className="pipeline-node relative flex flex-col p-space-sm rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors shadow-sm" data-step="1">
+              <div className="flex items-center justify-between mb-space-xs">
+                <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline font-mono">01</span>
                 <span className="material-symbols-outlined text-outline text-[18px]">input</span>
               </div>
-              <p className="font-mono text-xs text-on-surface font-semibold mb-1">Payload</p>
-              <p className="font-sans text-[11px] text-on-surface-variant flex-1 leading-relaxed">
-                Raw arbitrary JSON input ingested from prompt buffers.
-              </p>
-              <div className="mt-3 pt-2 bg-surface-container-lowest/50 -mx-3.5 -mb-3.5 p-2 rounded-b-lg flex items-center justify-between">
-                <span className="font-mono text-[10px] text-outline">Type</span>
-                <span className="font-mono text-[10px] text-primary font-bold">
-                  {routeData?.profile.top_level_type.toUpperCase() || 'ARRAY'}
-                </span>
+              <p className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold mb-space-3xs">Payload</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant flex-1">Raw arbitrary JSON input ingested from contextual LLM prompt buffers.</p>
+              <div className="mt-space-sm pt-space-xs bg-surface-container-lowest/50 -mx-space-sm -mb-space-sm p-space-xs rounded-b-lg flex items-center justify-between">
+                <span className="font-mono-data-sm text-mono-data-sm text-outline">Type Check</span>
+                <span className="font-label-caps text-label-caps text-primary font-mono">PASS</span>
               </div>
             </div>
 
-            {/* Step 2 */}
-            <div
-              onClick={() => setActiveStep(2)}
-              className={`flex flex-col p-3.5 rounded-lg bg-surface-container transition-all cursor-pointer border ${
-                activeStep === 2
-                  ? 'border-secondary bg-surface-container-high ring-1 ring-secondary/50'
-                  : 'border-outline-variant/20 hover:bg-surface-container-high'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline">
-                  02
-                </span>
+            {/* Step 2: Structural Profile */}
+            <div className="pipeline-node relative flex flex-col p-space-sm rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors shadow-sm" data-step="2">
+              <div className="flex items-center justify-between mb-space-xs">
+                <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline font-mono">02</span>
                 <span className="material-symbols-outlined text-outline text-[18px]">query_stats</span>
               </div>
-              <p className="font-mono text-xs text-on-surface font-semibold mb-1">Structural Profile</p>
-              <p className="font-sans text-[11px] text-on-surface-variant flex-1 leading-relaxed">
-                Calculates depth, key-homogeneity, primitive density.
-              </p>
-              <div className="mt-3 pt-2 bg-surface-container-lowest/50 -mx-3.5 -mb-3.5 p-2 rounded-b-lg flex items-center justify-between">
-                <span className="font-mono text-[10px] text-outline">AST Features</span>
-                <span className="font-mono text-[10px] text-secondary font-bold">19 DIMS</span>
+              <p className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold mb-space-3xs">Structural Profile</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant flex-1">Calculates depth, key-homogeneity, primitive density, and repetition ratios.</p>
+              <div className="mt-space-sm pt-space-xs bg-surface-container-lowest/50 -mx-space-sm -mb-space-sm p-space-xs rounded-b-lg flex items-center justify-between">
+                <span className="font-mono-data-sm text-mono-data-sm text-outline">AST Extracted</span>
+                <span className="font-label-caps text-label-caps text-secondary font-mono">16 DIMS</span>
               </div>
             </div>
 
-            {/* Step 3 */}
-            <div
-              onClick={() => setActiveStep(3)}
-              className={`flex flex-col p-3.5 rounded-lg bg-surface-container transition-all cursor-pointer border ${
-                activeStep === 3
-                  ? 'border-secondary bg-surface-container-high ring-1 ring-secondary/50'
-                  : 'border-outline-variant/20 hover:bg-surface-container-high'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline">
-                  03
-                </span>
+            {/* Step 3: Candidate Formats */}
+            <div className="pipeline-node relative flex flex-col p-space-sm rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors shadow-sm" data-step="3">
+              <div className="flex items-center justify-between mb-space-xs">
+                <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline font-mono">03</span>
                 <span className="material-symbols-outlined text-outline text-[18px]">view_in_ar</span>
               </div>
-              <p className="font-mono text-xs text-on-surface font-semibold mb-1">Candidates</p>
-              <p className="font-sans text-[11px] text-on-surface-variant flex-1 leading-relaxed">
-                Parallel speculative serialization across candidate dialects.
-              </p>
-              <div className="mt-3 pt-2 bg-surface-container-lowest/50 -mx-3.5 -mb-3.5 p-2 rounded-b-lg flex items-center justify-between">
-                <span className="font-mono text-[10px] text-outline">Formats</span>
-                <span className="font-mono text-[10px] text-tertiary font-bold">5 ACTIVE</span>
+              <p className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold mb-space-3xs">Candidates</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant flex-1">Parallel speculative serialization into valid dialect encoders (TOON, JTON, ONTO).</p>
+              <div className="mt-space-sm pt-space-xs bg-surface-container-lowest/50 -mx-space-sm -mb-space-sm p-space-xs rounded-b-lg flex items-center justify-between">
+                <span className="font-mono-data-sm text-mono-data-sm text-outline">Encoders</span>
+                <span className="font-label-caps text-label-caps text-tertiary font-mono">5 ACTIVE</span>
               </div>
             </div>
 
-            {/* Step 4: Critical Safety Stage */}
-            <div
-              onClick={() => setActiveStep(4)}
-              className={`relative flex flex-col p-3.5 rounded-lg bg-surface-container-high shadow-lg transition-all cursor-pointer border ${
-                activeStep === 4
-                  ? 'border-secondary ring-2 ring-secondary/60'
-                  : 'border-secondary/40'
-              }`}
-            >
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-secondary text-on-secondary font-mono text-[9px] font-bold tracking-wider shadow-md whitespace-nowrap flex items-center gap-1">
-                <span className="material-symbols-outlined text-[10px]">shield</span>
+            {/* Step 4: Round-Trip Validation (CRITICAL SAFETY STAGE) */}
+            <div className="pipeline-node relative flex flex-col p-space-sm rounded-lg bg-surface-container-high shadow-lg transition-transform hover:-translate-y-0.5" data-step="4">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-secondary text-on-secondary font-label-caps text-label-caps font-bold tracking-wider shadow-md whitespace-nowrap flex items-center gap-1">
+                <span className="material-symbols-outlined text-[11px]">shield</span>
                 ZERO DATA LOSS BARRIER
               </div>
-              <div className="flex items-center justify-between mb-2 mt-1">
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-container text-secondary font-bold">
-                  04 CRITICAL
-                </span>
+              <div className="flex items-center justify-between mb-space-xs mt-1">
+                <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container text-secondary font-mono">04 CRITICAL</span>
                 <span className="material-symbols-outlined text-secondary text-[20px]">verified</span>
               </div>
-              <p className="font-mono text-xs text-on-surface font-semibold mb-1">Validation</p>
-              <p className="font-sans text-[11px] text-on-surface-variant flex-1 leading-relaxed">
-                Strict deserialization & semantic isomorphism assertion against original.
+              <p className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold mb-space-3xs flex items-center gap-1">
+                Validation
               </p>
-              <div className="mt-3 pt-2 bg-surface-container-lowest -mx-3.5 -mb-3.5 p-2 rounded-b-lg flex items-center justify-between">
-                <span className="font-mono text-[10px] text-secondary">Soundness</span>
-                <span className="font-mono text-[10px] text-secondary font-bold">ISOMORPHIC</span>
+              <p className="font-body-sm text-body-sm text-on-surface-variant flex-1">Strict deserialization &amp; semantic isomorphism assertion against source payload.</p>
+              <div className="mt-space-sm pt-space-xs bg-surface-container-lowest -mx-space-sm -mb-space-sm p-space-xs rounded-b-lg flex items-center justify-between">
+                <span className="font-mono-data-sm text-mono-data-sm text-secondary">Round-Trip</span>
+                <span className="font-label-caps text-label-caps text-secondary font-mono flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-secondary"></span>ISOMORPHIC
+                </span>
               </div>
             </div>
 
-            {/* Step 5 */}
-            <div
-              onClick={() => setActiveStep(5)}
-              className={`flex flex-col p-3.5 rounded-lg bg-surface-container transition-all cursor-pointer border ${
-                activeStep === 5
-                  ? 'border-secondary bg-surface-container-high ring-1 ring-secondary/50'
-                  : 'border-outline-variant/20 hover:bg-surface-container-high'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline">
-                  05
-                </span>
+            {/* Step 5: Adaptive Selection */}
+            <div className="pipeline-node relative flex flex-col p-space-sm rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors shadow-sm" data-step="5">
+              <div className="flex items-center justify-between mb-space-xs">
+                <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline font-mono">05</span>
                 <span className="material-symbols-outlined text-outline text-[18px]">balance</span>
               </div>
-              <p className="font-mono text-xs text-on-surface font-semibold mb-1">Adaptive Routing</p>
-              <p className="font-sans text-[11px] text-on-surface-variant flex-1 leading-relaxed">
-                Selects minimum token footprint strictly from verified valid candidates.
-              </p>
-              <div className="mt-3 pt-2 bg-surface-container-lowest/50 -mx-3.5 -mb-3.5 p-2 rounded-b-lg flex items-center justify-between">
-                <span className="font-mono text-[10px] text-outline">Tokenizer</span>
-                <span className="font-mono text-[10px] text-primary font-bold">BPE cl100k</span>
+              <p className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold mb-space-3xs">Adaptive Routing</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant flex-1">Learned selector picks minimum token footprint strictly from verified valid candidates.</p>
+              <div className="mt-space-sm pt-space-xs bg-surface-container-lowest/50 -mx-space-sm -mb-space-sm p-space-xs rounded-b-lg flex items-center justify-between">
+                <span className="font-mono-data-sm text-mono-data-sm text-outline">Scored By</span>
+                <span className="font-label-caps text-label-caps text-primary font-mono">BPE TOKENIZER</span>
               </div>
             </div>
 
-            {/* Step 6 */}
-            <div
-              onClick={() => setActiveStep(6)}
-              className={`flex flex-col p-3.5 rounded-lg bg-surface-container transition-all cursor-pointer border ${
-                activeStep === 6
-                  ? 'border-secondary bg-surface-container-high ring-1 ring-secondary/50'
-                  : 'border-outline-variant/20 hover:bg-surface-container-high'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline">
-                  06
-                </span>
+            {/* Step 6: Optimized Output */}
+            <div className="pipeline-node relative flex flex-col p-space-sm rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors shadow-sm" data-step="6">
+              <div className="flex items-center justify-between mb-space-xs">
+                <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-lowest text-outline font-mono">06</span>
                 <span className="material-symbols-outlined text-secondary text-[18px]">rocket_launch</span>
               </div>
-              <p className="font-mono text-xs text-on-surface font-semibold mb-1">Optimized Output</p>
-              <p className="font-sans text-[11px] text-on-surface-variant flex-1 leading-relaxed">
-                Clean condensed stream delivered to LLM context with validation receipt.
-              </p>
-              <div className="mt-3 pt-2 bg-surface-container-lowest/50 -mx-3.5 -mb-3.5 p-2 rounded-b-lg flex items-center justify-between">
-                <span className="font-mono text-[10px] text-secondary">Receipt</span>
-                <span className="font-mono text-[10px] text-secondary font-bold">SIG_VALID</span>
+              <p className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold mb-space-3xs">Optimized Output</p>
+              <p className="font-body-sm text-body-sm text-on-surface-variant flex-1">Clean condensed stream delivered to LLM inference pipeline with safety receipt.</p>
+              <div className="mt-space-sm pt-space-xs bg-surface-container-lowest/50 -mx-space-sm -mb-space-sm p-space-xs rounded-b-lg flex items-center justify-between">
+                <span className="font-mono-data-sm text-mono-data-sm text-secondary">Safety Hash</span>
+                <span className="font-label-caps text-label-caps text-secondary font-mono">SIG_VALID</span>
               </div>
             </div>
           </div>
 
-          {/* Live Telemetry Receipt Bar */}
-          <div className="mt-4 p-3 rounded-lg bg-surface-container-lowest flex flex-wrap items-center justify-between gap-3 border border-outline-variant/20">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[10px] text-secondary uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+          {/* Interactive Micro-Console for Simulation */}
+          <div className="mt-space-md p-space-sm rounded-lg bg-surface-container-lowest flex flex-wrap items-center justify-between gap-space-xs" id="pipeline-telemetry">
+            <div className="flex items-center gap-space-sm">
+              <span className="font-label-caps text-label-caps text-secondary uppercase tracking-wider flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-secondary" /> LIVE SIMULATION RECEIPT
               </span>
-              <span className="font-mono text-xs text-outline">#PAYLOAD_SIM_01</span>
-              {routeData && (
-                <span className="font-mono text-xs text-on-surface-variant">
-                  Depth: {routeData.profile.max_depth} | Uniformity:{' '}
-                  {(routeData.profile.schema_uniformity * 100).toFixed(0)}%
-                </span>
-              )}
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">Payload {telemetry.id}</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Depth: {telemetry.depth} | Homogeneity: {telemetry.hom}</span>
             </div>
-            <div className="flex items-center gap-4 font-mono text-xs">
-              <span className="text-on-surface-variant">
-                Valid Candidates:{' '}
-                <span className="text-secondary font-semibold">
-                  {routeData?.valid_candidates.length || 0}/5
-                </span>
-              </span>
-              <span className="text-on-surface-variant">
-                Winner:{' '}
-                <span className="text-primary font-bold uppercase">
-                  {routeData?.selected_format || 'COMPACT JSON'} (-{routeData?.token_savings_vs_json?.toFixed(1) || '0.0'}%)
-                </span>
-              </span>
-              <span className="text-outline">
-                Latency:{' '}
-                <span className="text-on-surface font-medium">
-                  {routeData?.routing_latency_ms.toFixed(2) || '0.00'} ms
-                </span>
-              </span>
+            <div className="flex items-center gap-space-md font-mono-data-sm text-mono-data-sm">
+              <span className="text-on-surface-variant">Validated: <span className="text-secondary font-semibold">{telemetry.valids} Formats</span></span>
+              <span className="text-on-surface-variant">Winner: <span className="text-secondary font-bold">{telemetry.winner}</span></span>
+              <span className="text-outline">Roundtrip Latency: <span className="text-on-surface">{telemetry.latency}</span></span>
             </div>
           </div>
         </div>
       </section>
 
       {/* Two Column Bottom Section */}
-      <section className="px-8 py-4 max-w-7xl mx-auto w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-          {/* Left Column: Format Distribution */}
-          <div className="lg:col-span-7 flex flex-col p-6 rounded-xl bg-surface-container-low border border-outline-variant/20 shadow-md">
-            <div className="flex items-center justify-between mb-2">
+      <section className="px-space-lg py-space-md mb-space-xl max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-md items-stretch">
+          {/* LEFT: FORMAT SELECTION DISTRIBUTION */}
+          <div className="lg:col-span-7 flex flex-col p-space-lg rounded-xl bg-surface-container-low shadow-lg">
+            <div className="flex items-center justify-between mb-space-xs">
               <div>
-                <span className="font-mono text-[10px] text-secondary uppercase tracking-widest font-semibold">
-                  EMPIRICAL CORPUS EVALUATION
-                </span>
-                <h3 className="font-headline text-lg text-on-surface font-semibold">
-                  Format Selection Distribution
-                </h3>
+                <span className="font-label-caps text-label-caps text-secondary uppercase tracking-widest">EMPIRICAL CORPUS EVALUATION</span>
+                <h3 className="font-headline-md text-headline-md text-on-surface">Format Selection Distribution</h3>
               </div>
-              <span className="font-mono text-xs text-outline bg-surface-container px-2 py-1 rounded">
+              <span className="font-mono-data-sm text-mono-data-sm text-outline bg-surface-container px-space-xs py-1 rounded">
                 N = 200 Payloads
               </span>
             </div>
-            <p className="font-sans text-xs text-on-surface-variant mb-6 leading-relaxed">
-              Distribution of winning formats selected by the Adaptive Router across the benchmark
-              corpus categories (Flat Tabular, Nested Objects, Deep Nested, Heterogeneous, Key-Sparse).
+            <p className="font-body-sm text-body-sm text-on-surface-variant mb-space-lg">
+              Empirical winner distribution across the synthetic benchmark suite, balancing AST depth, repeating keys, and nesting overhead.
             </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center flex-1">
-              {/* Distribution Stats */}
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between font-mono text-xs mb-1">
-                    <span className="text-secondary font-semibold">Compact JSON</span>
-                    <span className="text-on-surface">160 / 200 (80.0%)</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
-                    <div className="h-full bg-secondary rounded-full" style={{ width: '80%' }} />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between font-mono text-xs mb-1">
-                    <span className="text-primary font-semibold">TOON</span>
-                    <span className="text-on-surface">40 / 200 (20.0%)</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
-                    <div className="h-full bg-primary rounded-full" style={{ width: '20%' }} />
-                  </div>
-                  <p className="font-mono text-[10px] text-outline mt-0.5">
-                    *100% win rate on Flat Uniform Tabular (63.4% reduction)
-                  </p>
-                </div>
-
-                <div>
-                  <div className="flex justify-between font-mono text-xs mb-1">
-                    <span className="text-tertiary font-semibold">JTON / ONTO</span>
-                    <span className="text-on-surface">Filtered for Safety</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-surface-container-highest overflow-hidden">
-                    <div className="h-full bg-tertiary rounded-full" style={{ width: '0%' }} />
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-space-md items-center flex-1">
+              {/* Vector Donut Chart */}
+              <div className="sm:col-span-5 flex flex-col items-center justify-center relative p-space-xs">
+                <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
+                  <circle className="text-surface-container" cx="50" cy="50" fill="none" r="38" stroke="currentColor" strokeWidth="12" />
+                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#4cd7f6" strokeDasharray="100.28 238.76" strokeDashoffset="0" strokeWidth="12" />
+                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#adc6ff" strokeDasharray="66.85 238.76" strokeDashoffset="-100.28" strokeWidth="12" />
+                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#d0bcff" strokeDasharray="42.98 238.76" strokeDashoffset="-167.13" strokeWidth="12" />
+                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#4d8eff" strokeDasharray="19.10 238.76" strokeDashoffset="-210.11" strokeWidth="12" />
+                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#8c909f" strokeDasharray="9.55 238.76" strokeDashoffset="-229.21" strokeWidth="12" />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
+                  <span className="font-headline-lg text-headline-lg text-on-surface font-bold">200</span>
+                  <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">PAYLOADS</span>
                 </div>
               </div>
 
-              {/* Insights Box */}
-              <div className="p-4 rounded-lg bg-surface-container-lowest border border-outline-variant/20 flex flex-col gap-2">
-                <span className="font-mono text-[10px] text-secondary uppercase font-bold tracking-wider">
-                  Core Empirical Finding
-                </span>
-                <p className="font-sans text-xs text-on-surface-variant leading-relaxed">
-                  Specialized formats (TOON, JTON) provide unmatched savings on uniform tables,
-                  but exhibit up to <span className="text-rose-400 font-semibold">80% defect rates</span> when
-                  forced onto non-uniform or deeply nested payloads.
-                </p>
-                <div className="pt-2 border-t border-outline-variant/20 flex items-center justify-between text-xs">
-                  <span className="font-mono text-outline">Fallback Rate:</span>
-                  <span className="font-mono text-emerald-400 font-bold">0.0% (Adaptive)</span>
+              {/* Distribution Legend and Metric Bars */}
+              <div className="sm:col-span-7 flex flex-col justify-center space-y-space-xs">
+                <div className="p-space-2xs rounded bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between">
+                  <div className="flex items-center gap-space-xs">
+                    <span className="h-3 w-3 rounded-sm bg-secondary shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold">Compact JSON</span>
+                      <span className="font-body-sm text-body-sm text-outline">Whitespace &amp; punctuation optimized</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-headline-md text-headline-md text-secondary font-bold">42%</span>
+                    <span className="block font-mono-data-sm text-mono-data-sm text-outline">84 runs</span>
+                  </div>
+                </div>
+
+                <div className="p-space-2xs rounded bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between">
+                  <div className="flex items-center gap-space-xs">
+                    <span className="h-3 w-3 rounded-sm bg-primary shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold">JTON</span>
+                      <span className="font-body-sm text-body-sm text-outline">Tabular key repetition compression</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-headline-md text-headline-md text-primary font-bold">28%</span>
+                    <span className="block font-mono-data-sm text-mono-data-sm text-outline">56 runs</span>
+                  </div>
+                </div>
+
+                <div className="p-space-2xs rounded bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between">
+                  <div className="flex items-center gap-space-xs">
+                    <span className="h-3 w-3 rounded-sm bg-tertiary shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold">ONTO</span>
+                      <span className="font-body-sm text-body-sm text-outline">Object-nesting tuple oriented</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-headline-md text-headline-md text-tertiary font-bold">18%</span>
+                    <span className="block font-mono-data-sm text-mono-data-sm text-outline">36 runs</span>
+                  </div>
+                </div>
+
+                <div className="p-space-2xs rounded bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between">
+                  <div className="flex items-center gap-space-xs">
+                    <span className="h-3 w-3 rounded-sm bg-primary-container shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold">TOON</span>
+                      <span className="font-body-sm text-body-sm text-outline">Token-ordered optimal notation</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-headline-md text-headline-md text-primary-container font-bold">8%</span>
+                    <span className="block font-mono-data-sm text-mono-data-sm text-outline">16 runs</span>
+                  </div>
+                </div>
+
+                <div className="p-space-2xs rounded bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between">
+                  <div className="flex items-center gap-space-xs">
+                    <span className="h-3 w-3 rounded-sm bg-outline shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold">Plain JSON</span>
+                      <span className="font-body-sm text-body-sm text-outline">Standard serialization baseline</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-headline-md text-headline-md text-outline font-bold">4%</span>
+                    <span className="block font-mono-data-sm text-mono-data-sm text-outline">8 runs</span>
+                  </div>
                 </div>
               </div>
             </div>
+            <div className="mt-space-md pt-space-xs flex items-center justify-between bg-surface-container-lowest/50 px-space-sm py-2 rounded-lg">
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">Primary Routing Determinant:</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-secondary font-medium">Uniformity &gt; 0.72 triggers JTON/ONTO Tabular Compression</span>
+            </div>
           </div>
 
-          {/* Right Column: Fast Actions & Navigation */}
-          <div className="lg:col-span-5 flex flex-col p-6 rounded-xl bg-surface-container-low border border-outline-variant/20 shadow-md">
-            <span className="font-mono text-[10px] text-secondary uppercase tracking-widest font-semibold mb-1">
-              EXPLORE PROTOTYPE
-            </span>
-            <h3 className="font-headline text-lg text-on-surface font-semibold mb-4">
-              Research Workbenches
-            </h3>
-
-            <div className="space-y-2.5 flex-1">
-              <Link
-                href="/analyze"
-                className="group p-3 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between border border-outline-variant/15"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary text-[20px]">
-                    data_object
-                  </span>
-                  <div>
-                    <p className="font-headline text-xs font-semibold text-on-surface group-hover:text-primary transition-colors">
-                      Analyze Payload
-                    </p>
-                    <p className="font-sans text-[11px] text-on-surface-variant">
-                      Inspect 19-dimensional topological AST profiles
-                    </p>
+          {/* RIGHT: SYSTEM PRINCIPLES */}
+          <div className="lg:col-span-5 flex flex-col justify-between p-space-lg rounded-xl bg-surface-container-low shadow-lg">
+            <div className="mb-space-md">
+              <div className="flex items-center gap-space-2xs mb-space-3xs">
+                <span className="material-symbols-outlined text-secondary text-[16px]">gavel</span>
+                <span className="font-label-caps text-label-caps text-secondary uppercase tracking-widest">INVARIANTS &amp; AXIOMS</span>
+              </div>
+              <h3 className="font-headline-md text-headline-md text-on-surface">System Principles</h3>
+              <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">
+                Execution rules enforced unconditionally at every pipeline cycle. Safety strictly precedes economy.
+              </p>
+            </div>
+            <div className="space-y-space-sm flex-1 flex flex-col justify-between">
+              {/* Principle 1: VALIDITY */}
+              <div className="relative p-space-md rounded-xl bg-surface-container-high shadow-md overflow-hidden">
+                <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-secondary" />
+                <div className="flex items-center justify-between mb-space-xs pl-space-2xs">
+                  <div className="flex items-center gap-space-2xs">
+                    <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-secondary text-on-secondary font-bold font-mono">01 NON-NEGOTIABLE</span>
+                    <span className="font-mono-data-lg text-mono-data-lg text-secondary font-bold">VALIDITY</span>
                   </div>
+                  <span className="material-symbols-outlined text-secondary text-[20px]">verified</span>
                 </div>
-                <span className="material-symbols-outlined text-outline text-[16px] group-hover:translate-x-1 transition-transform">
-                  arrow_forward
-                </span>
-              </Link>
+                <p className="font-body-md text-body-md text-on-surface pl-space-2xs font-medium">
+                  Data must round-trip safely. No loss of types, null vs missing distinction, or structure.
+                </p>
+                <div className="mt-space-xs pl-space-2xs flex items-center gap-space-xs text-secondary font-mono-data-sm text-mono-data-sm">
+                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                  <span>Zero tolerated degradation. Rejected candidates purged immediately.</span>
+                </div>
+              </div>
 
-              <Link
-                href="/router"
-                className="group p-3 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between border border-outline-variant/15"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-secondary text-[20px]">
-                    alt_route
-                  </span>
-                  <div>
-                    <p className="font-headline text-xs font-semibold text-on-surface group-hover:text-secondary transition-colors">
-                      Adaptive Router
-                    </p>
-                    <p className="font-sans text-[11px] text-on-surface-variant">
-                      Inspect step-by-step speculative routing & token comparison
-                    </p>
+              {/* Principle 2: ADAPTIVE SUITABILITY */}
+              <div className="relative p-space-md rounded-xl bg-surface-container shadow-sm overflow-hidden">
+                <div className="absolute top-0 left-0 bottom-0 w-1 bg-primary" />
+                <div className="flex items-center justify-between mb-space-xs pl-space-2xs">
+                  <div className="flex items-center gap-space-2xs">
+                    <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-highest text-primary font-bold font-mono">02 CONTEXTUAL</span>
+                    <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">ADAPTIVE SUITABILITY</span>
                   </div>
+                  <span className="material-symbols-outlined text-primary text-[18px]">hub</span>
                 </div>
-                <span className="material-symbols-outlined text-outline text-[16px] group-hover:translate-x-1 transition-transform">
-                  arrow_forward
-                </span>
-              </Link>
+                <p className="font-body-md text-body-md text-on-surface-variant pl-space-2xs">
+                  Choose according to structural profile (depth, uniformity, repeated keys). No universal hammer.
+                </p>
+                <div className="mt-space-xs pl-space-2xs flex items-center gap-space-xs text-outline font-mono-data-sm text-mono-data-sm">
+                  <span className="material-symbols-outlined text-[14px]">insights</span>
+                  <span>Dynamically fitted to payload topology rather than rigid heuristics.</span>
+                </div>
+              </div>
 
-              <Link
-                href="/benchmark"
-                className="group p-3 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between border border-outline-variant/15"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-tertiary text-[20px]">
-                    speed
-                  </span>
-                  <div>
-                    <p className="font-headline text-xs font-semibold text-on-surface group-hover:text-tertiary transition-colors">
-                      Benchmark Lab
-                    </p>
-                    <p className="font-sans text-[11px] text-on-surface-variant">
-                      Run N=200 empirical evaluation across 5 strategies
-                    </p>
+              {/* Principle 3: TOKEN EFFICIENCY */}
+              <div className="relative p-space-md rounded-xl bg-surface-container shadow-sm overflow-hidden">
+                <div className="absolute top-0 left-0 bottom-0 w-1 bg-tertiary" />
+                <div className="flex items-center justify-between mb-space-xs pl-space-2xs">
+                  <div className="flex items-center gap-space-2xs">
+                    <span className="font-label-caps text-label-caps px-1.5 py-0.5 rounded bg-surface-container-highest text-tertiary font-bold font-mono">03 OPTIMIZATION</span>
+                    <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">TOKEN EFFICIENCY</span>
                   </div>
+                  <span className="material-symbols-outlined text-tertiary text-[18px]">data_saver_on</span>
                 </div>
-                <span className="material-symbols-outlined text-outline text-[16px] group-hover:translate-x-1 transition-transform">
-                  arrow_forward
-                </span>
-              </Link>
-
-              <Link
-                href="/reliability"
-                className="group p-3 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors flex items-center justify-between border border-outline-variant/15"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-emerald-400 text-[20px]">
-                    verified
-                  </span>
-                  <div>
-                    <p className="font-headline text-xs font-semibold text-on-surface group-hover:text-emerald-400 transition-colors">
-                      Reliability Suite
-                    </p>
-                    <p className="font-sans text-[11px] text-on-surface-variant">
-                      Audit numeric strings, null preservation, delimiter immunity
-                    </p>
-                  </div>
+                <p className="font-body-md text-body-md text-on-surface-variant pl-space-2xs">
+                  Optimize token cost strictly among valid candidates. Smaller is never chosen if unsafe.
+                </p>
+                <div className="mt-space-xs pl-space-2xs flex items-center gap-space-xs text-outline font-mono-data-sm text-mono-data-sm">
+                  <span className="material-symbols-outlined text-[14px]">lock</span>
+                  <span>Efficiency is a constrained objective function under safety constraints.</span>
                 </div>
-                <span className="material-symbols-outlined text-outline text-[16px] group-hover:translate-x-1 transition-transform">
-                  arrow_forward
-                </span>
-              </Link>
+              </div>
+            </div>
+            {/* Footnote / Research Citation */}
+            <div className="mt-space-md pt-space-xs border-t border-outline-variant/20 flex items-center justify-between text-outline">
+              <span className="font-label-caps text-label-caps uppercase">SPECIFICATION REF:</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-secondary font-mono">ISO/IEC-21778 &amp; AST-ROUTER-v2</span>
             </div>
           </div>
         </div>

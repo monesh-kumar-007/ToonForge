@@ -19,6 +19,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from benchmarks.generate_corpus import generate_benchmark_corpus
+from apps.api.models.domain import CandidateStatus
 from apps.api.serializers.serialization_manager import SerializationManager
 from apps.api.services.router import exhaustive_router
 from apps.api.services.tokenizer import token_estimator
@@ -29,15 +30,35 @@ def run_benchmark_suite(
     corpus_size: int = 200,
     seed: int = 200,
     output_dir: str | Path = "benchmarks/results",
+    corpus: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Execute the full benchmark experiment."""
-    print(f"[*] Initializing corpus (N={corpus_size}, seed={seed})...")
-    corpus = generate_benchmark_corpus(size=corpus_size, seed=seed)
+    """Execute the full benchmark experiment.
+
+    Methodology (VALIDITY BEFORE EFFICIENCY):
+        - Token-efficiency statistics (mean/median/std reduction) are computed
+          over STRICTLY VALID samples only. Invalid/ineligible samples never
+          contribute an artificial 0.0 savings value.
+        - Applicability/reliability rates always use the FULL corpus as the
+          denominator:
+              validity_rate      = valid_count / total
+              ineligibility_rate = ineligible_count / total
+              rejection_rate     = rejected_count / total
+        - `fallback_rate` reports genuine FINAL FALLBACK events only. Baseline
+          formats never invoke a fallback mechanism, so ineligibility or
+          rejection for them is never labeled as fallback.
+    """
+    if corpus is None:
+        print(f"[*] Initializing corpus (N={corpus_size}, seed={seed})...")
+        corpus = generate_benchmark_corpus(size=corpus_size, seed=seed)
+    else:
+        print(f"[*] Evaluating provided corpus (N={len(corpus)})...")
 
     strategies = ["JSON", "Compact JSON", "TOON", "JTON", "ONTO", "Adaptive Router"]
     savings_by_strategy: dict[str, list[float]] = {s: [] for s in strategies}
     tokens_by_strategy: dict[str, list[int]] = {s: [] for s in strategies}
     validity_by_strategy: dict[str, int] = {s: 0 for s in strategies}
+    ineligible_by_strategy: dict[str, int] = {s: 0 for s in strategies}
+    rejected_by_strategy: dict[str, int] = {s: 0 for s in strategies}
     fallback_counts: dict[str, int] = {s: 0 for s in strategies}
     latency_by_strategy: dict[str, list[float]] = {s: [] for s in strategies}
 
@@ -86,26 +107,28 @@ def run_benchmark_suite(
             t_ser = (time.perf_counter() - t0) * 1000.0
             latency_by_strategy[fmt].append(t_ser)
 
-            if cand.eligible and cand.encoded:
-                if cand.decoded is not None:
-                    is_valid, _ = validator.validate(payload, cand.decoded)
-                else:
-                    is_valid = False
+            if cand.status == CandidateStatus.INELIGIBLE:
+                # Structurally not applicable (the format's own eligibility logic).
+                # This is NOT validity, NOT rejection, and NOT a fallback event.
+                ineligible_by_strategy[fmt] += 1
+                continue
 
-                if is_valid:
-                    tokens = token_estimator.estimate(cand.encoded)
-                    tokens_by_strategy[fmt].append(tokens)
-                    savings = token_estimator.estimate_savings_pct(json_tokens, tokens)
-                    savings_by_strategy[fmt].append(savings)
-                    validity_by_strategy[fmt] += 1
-                else:
-                    tokens_by_strategy[fmt].append(json_tokens)
-                    savings_by_strategy[fmt].append(0.0)
-                    fallback_counts[fmt] += 1
+            if cand.encoded is None or cand.decoded is None:
+                # Eligible but encode/decode failed -> candidate rejection.
+                rejected_by_strategy[fmt] += 1
+                continue
+
+            is_valid, _ = validator.validate(payload, cand.decoded)
+            if is_valid:
+                tokens = token_estimator.estimate(cand.encoded)
+                tokens_by_strategy[fmt].append(tokens)
+                savings = token_estimator.estimate_savings_pct(json_tokens, tokens)
+                savings_by_strategy[fmt].append(savings)
+                validity_by_strategy[fmt] += 1
             else:
-                tokens_by_strategy[fmt].append(json_tokens)
-                savings_by_strategy[fmt].append(0.0)
-                fallback_counts[fmt] += 1
+                # Eligible, encoded/decoded, but strict round-trip validation
+                # failed -> candidate rejection (NOT a fallback event).
+                rejected_by_strategy[fmt] += 1
 
     total_duration = time.perf_counter() - start_time
     total_samples = len(corpus)
@@ -125,13 +148,24 @@ def run_benchmark_suite(
 
     summary_results = []
     for s in strategies:
-        sav = savings_by_strategy[s]
+        sav = savings_by_strategy[s]  # strictly valid samples only
         lats = latency_by_strategy[s]
+        total = total_samples
+        val_cnt = validity_by_strategy[s]
+        inel_cnt = ineligible_by_strategy[s]
+        rej_cnt = rejected_by_strategy[s]
+        fb_cnt = fallback_counts[s]
+
+        # Valid-only compression efficiency — no artificial 0.0 dilution.
         mean_sav = round(statistics.mean(sav) if sav else 0.0, 2)
         median_sav = round(statistics.median(sav) if sav else 0.0, 2)
         std_sav = round(statistics.stdev(sav) if len(sav) > 1 else 0.0, 2)
-        fb_rate = round(fallback_counts[s] / total_samples, 4)
-        val_rate = round(validity_by_strategy[s] / total_samples, 4)
+
+        # Full-corpus applicability/reliability rates.
+        val_rate = round(val_cnt / total, 4)
+        inel_rate = round(inel_cnt / total, 4)
+        rej_rate = round(rej_cnt / total, 4)
+        fb_rate = round(fb_cnt / total, 4)
         mean_lat = round(statistics.mean(lats) if lats else 0.0, 3)
 
         summary_results.append({
@@ -140,10 +174,16 @@ def run_benchmark_suite(
             "median_reduction_pct": median_sav,
             "std_reduction_pct": std_sav,
             "validity_rate": val_rate,
+            "ineligibility_rate": inel_rate,
+            "rejection_rate": rej_rate,
             "fallback_rate": fb_rate,
             "mean_latency_ms": mean_lat,
             "routing_grade": _grade(mean_sav, fb_rate),
-            "sample_count": total_samples,
+            "sample_count": total,
+            "valid_count": val_cnt,
+            "ineligible_count": inel_cnt,
+            "rejected_count": rej_cnt,
+            "final_fallback_count": fb_cnt,
         })
 
     cat_summary = {}

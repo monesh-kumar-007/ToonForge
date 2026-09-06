@@ -138,6 +138,13 @@ class BenchmarkResultSummary(BaseModel):
     fallback_rate: float
     routing_grade: str
     sample_count: int
+    validity_rate: Optional[float] = None
+    ineligibility_rate: Optional[float] = None
+    rejection_rate: Optional[float] = None
+    valid_count: Optional[int] = None
+    ineligible_count: Optional[int] = None
+    rejected_count: Optional[int] = None
+    final_fallback_count: Optional[int] = None
 
 
 class BenchmarkResponse(BaseModel):
@@ -169,6 +176,10 @@ class LearnedRouterPredictResponse(BaseModel):
     exhaustive_latency_ms: float
     feature_vector: Dict[str, float]
     model_trained: bool
+    optimal_selection: Optional[bool] = None
+    invalid_selection: Optional[bool] = None
+    regret_tokens: Optional[int] = None
+    regret_pct: Optional[float] = None
 
 
 class LearnedRouterMetricsResponse(BaseModel):
@@ -181,6 +192,18 @@ class LearnedRouterMetricsResponse(BaseModel):
     training_corpus_size: Optional[int]
     model_depth: Optional[int]
     message: Optional[str] = None
+    exact_match_rate: Optional[float] = None
+    median_regret_tokens: Optional[float] = None
+    mean_regret_pct: Optional[float] = None
+    p95_regret_pct: Optional[float] = None
+    min_regret_pct: Optional[float] = None
+    max_regret_pct: Optional[float] = None
+    invalid_selection_rate: Optional[float] = None
+    ineligible_selection_rate: Optional[float] = None
+    rejected_selection_rate: Optional[float] = None
+    eligible_selection_rate: Optional[float] = None
+    evaluation_corpus_size: Optional[int] = None
+    eval_random_seed: Optional[int] = None
 
 
 class AdversarialCaseResult(BaseModel):

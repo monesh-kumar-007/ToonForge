@@ -2,31 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
-
 @layer base {
   html, body {
     margin: 0;
     padding: 0;
+  }
+
+  body {
+    overscroll-behavior: none;
     background-color: #0f131c;
     color: #dfe2ee;
     font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
   }
-  
+
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    display: none;
   }
-  ::-webkit-scrollbar-track {
-    background: #0a0e16;
+
+  main > :first-child {
+    margin-top: 0 !important;
   }
-  ::-webkit-scrollbar-thumb {
-    background: #262a33;
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: #424754;
+  main > :last-child {
+    margin-bottom: 0 !important;
   }
 }
 
@@ -42,4 +39,5 @@
   white-space: nowrap;
   word-wrap: normal;
   direction: ltr;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }

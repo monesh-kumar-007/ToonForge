@@ -81,4 +81,4 @@ Every encoded candidate must be immediately decoded and recursively validated ag
 Coordinates the pipeline across all 5 candidate formats. It discards ineligible or failing formats, calculates exact BPE token estimates on all valid candidates, and selects the format that maximizes token savings.
 
 ### 5. Learned Router (`services/learned_router.py`)
-A fast Decision Tree Classifier trained on structural profile feature vectors. Predicts the optimal format in sub-millisecond latency (`~0.5ms` vs `~2.5ms` exhaustive routing), achieving 100% agreement on benchmark datasets.
+A fast Decision Tree Classifier trained on structural profile feature vectors. Predicts the optimal format in sub-millisecond latency (measured `~0.04–0.6ms`) versus exhaustive routing (measured `~1.7–2.2ms` on the benchmark machine — environment dependent), achieving 100% agreement on the deterministic evaluation corpus (see `docs/benchmark_methodology.md` for the canonical split methodology).

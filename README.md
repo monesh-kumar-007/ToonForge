@@ -11,7 +11,7 @@ TOONFORGE is a full-stack research prototype evaluating dynamic serialization st
 - **Structural Profiler**: 19-dimensional topological feature vector extractor
 - **Strict Validator**: Byte-level and type-exact semantic validation preventing silent data corruption
 - **Exhaustive Router**: Validates all eligible candidates and selects minimal token cost
-- **Learned Router**: Decision tree approximation achieving 3.5x speedup with 100% agreement
+- **Learned Router**: Decision tree approximation achieving ~3.6–3.9× speedup with 100% agreement on the deterministic evaluation corpus
 - **Benchmark Engine**: Deterministic corpus generator ($N=200$, seed=200) across 5 structural categories
 
 ---
@@ -30,15 +30,18 @@ toonforge/
 │   │   └── tests/       # Unit, regression, integration & API tests
 │   └── web/             # Next.js 14 frontend dashboard
 ├── benchmarks/          # Empirical evaluation suite
-│   ├── datasets/        # Deterministic synthetic corpora
-│   ├── results/         # Benchmark execution summaries
+│   ├── datasets/        # Corpora generated in-memory on demand (deterministic, seed=200)
+│   ├── results/         # Benchmark execution summaries (raw runs are ephemeral)
 │   ├── generate_corpus.py
 │   ├── run_benchmark.py
-│   └── learned_router_eval.py
+│   ├── learned_router_eval.py
+│   └── adversarial_cases.py
 ├── packages/
 │   └── sdk/             # Python & TypeScript client SDKs
 └── docs/                # Architecture, API & empirical methodology docs
 ```
+
+**Final canonical results & methodology live in [`docs/benchmark_methodology.md`](docs/benchmark_methodology.md) — treat that file as the single source of truth for all benchmark numbers.**
 
 ---
 
@@ -62,6 +65,7 @@ python -m pytest apps/api/tests/ -v
 cd toonforge
 python benchmarks/run_benchmark.py --size 200 --seed 200
 python benchmarks/analyze_results.py
+python benchmarks/learned_router_eval.py --size 200 --seed 200
 ```
 
 ### 4. Run Adversarial Edge Case Suite
@@ -69,3 +73,20 @@ python benchmarks/analyze_results.py
 cd toonforge
 python benchmarks/adversarial_cases.py
 ```
+
+---
+
+## Development Notes
+
+- **Run everything from the repo root** (`toonforge/`). Module and data paths
+  (e.g. `apps.api.main`, `apps/api/models/learned_router.pkl`) resolve relative
+  to the working directory — never `cd` into `apps/api`.
+- `apps/api/models/learned_router.pkl` is a committed binary model artifact.
+  Running the test suite or router eval **retrains and overwrites it**; revert
+  with `git checkout -- apps/api/models/learned_router.pkl` after running tests.
+- `npx tsc --noEmit` in `apps/web` writes `tsconfig.tsbuildinfo` (the tsconfig is
+  `incremental`) — delete it before committing.
+- Token estimates use tiktoken **`cl100k_base`** (pinned v0.13.0); do not switch
+  to `o200k_base`.
+- No Python linter is configured — verification is `pytest` + the canonical
+  benchmark run (`--size 200 --seed 200`).

@@ -24,6 +24,11 @@ from apps.api.services.profiler import profiler
 from apps.api.services.router import exhaustive_router
 from apps.api.services.learned_router import learned_router
 from apps.api.services.tokenizer import token_estimator
+from apps.api.services.learned_router_eval import (
+    oracle_for,
+    classify_prediction,
+    evaluate_samples,
+)
 
 
 def evaluate_learned_router(
@@ -55,7 +60,7 @@ def evaluate_learned_router(
     correct = 0
     exhaustive_latencies = []
     learned_latencies = []
-    regrets = []
+    eval_results = []
 
     per_class = {}
 
@@ -69,8 +74,6 @@ def evaluate_learned_router(
         exhaustive_latencies.append(t_ex)
 
         truth_format = ex_res.selected_format or "JSON"
-        json_tokens = ex_res.json_token_baseline or 1
-        optimal_tokens = ex_res.token_counts.get(truth_format, json_tokens)
 
         # Learned router timing (profile + predict)
         t0 = time.perf_counter()
@@ -84,10 +87,10 @@ def evaluate_learned_router(
         if is_match:
             correct += 1
 
-        # Calculate token regret: if learned picked a format that is valid, how many tokens were wasted?
-        learned_tokens = ex_res.token_counts.get(pred_format, json_tokens)
-        regret_pct = max(0.0, (learned_tokens - optimal_tokens) / max(json_tokens, 1) * 100.0)
-        regrets.append(regret_pct)
+        # Step 5: validity-first oracle + oracle-relative regret. Invalid
+        # predictions are NEVER assigned a JSON fallback token cost.
+        oracle = oracle_for(ex_res)
+        eval_results.append(classify_prediction(pred_format, oracle))
 
         if truth_format not in per_class:
             per_class[truth_format] = {"truth_count": 0, "predicted_correct": 0}
@@ -95,11 +98,12 @@ def evaluate_learned_router(
         if is_match:
             per_class[truth_format]["predicted_correct"] += 1
 
+    agg = evaluate_samples(eval_results)
+
     accuracy = round(correct / len(test_corpus), 4)
     avg_ex_lat = round(sum(exhaustive_latencies) / len(exhaustive_latencies), 3)
     avg_lr_lat = round(sum(learned_latencies) / len(learned_latencies), 3)
     speedup = round(avg_ex_lat / max(avg_lr_lat, 0.001), 2)
-    avg_regret = round(sum(regrets) / len(regrets), 2)
 
     eval_report = {
         "dataset": {
@@ -108,7 +112,20 @@ def evaluate_learned_router(
             "test_size": len(test_corpus),
         },
         "accuracy": accuracy,
-        "average_regret_pct": avg_regret,
+        "exact_match_rate": agg["exact_match_rate"],
+        "average_regret_pct": agg["mean_regret_pct"],
+        "mean_regret_pct": agg["mean_regret_pct"],
+        "median_regret_tokens": agg["median_regret_tokens"],
+        "mean_token_regret": agg["mean_token_regret"],
+        "p95_regret_pct": agg["p95_regret_pct"],
+        "min_regret_pct": agg["min_regret_pct"],
+        "max_regret_pct": agg["max_regret_pct"],
+        "invalid_selection_rate": agg["invalid_selection_rate"],
+        "ineligible_selection_rate": agg["ineligible_selection_rate"],
+        "rejected_selection_rate": agg["rejected_selection_rate"],
+        "eligible_selection_rate": agg["eligible_selection_rate"],
+        "final_fallback_rate": agg["final_fallback_rate"],
+        "evaluation_sample_count": agg["sample_count"],
         "exhaustive_avg_latency_ms": avg_ex_lat,
         "learned_avg_latency_ms": avg_lr_lat,
         "speedup_factor": speedup,
@@ -122,11 +139,17 @@ def evaluate_learned_router(
     print("\n" + "=" * 60)
     print("LEARNED ROUTER EVALUATION RESULTS")
     print("=" * 60)
-    print(f"Top-1 Accuracy:        {accuracy * 100:.1f}%")
-    print(f"Avg Token Regret:      {avg_regret:.2f}%")
-    print(f"Exhaustive Latency:    {avg_ex_lat:.2f} ms")
-    print(f"Learned Latency:       {avg_lr_lat:.2f} ms")
-    print(f"Speedup Factor:        {speedup:.1f}x")
+    print(f"Top-1 Accuracy:          {accuracy * 100:.1f}%")
+    print(f"Exact Match (tie-aware): {agg['exact_match_rate'] * 100:.1f}%")
+    print(f"Avg Token Regret:        {agg['mean_regret_pct']}")
+    print(f"Median Regret:           {agg['median_regret_tokens']} tokens")
+    print(f"p95 Regret:              {agg['p95_regret_pct']}")
+    print(f"Invalid Selection Rate:  {agg['invalid_selection_rate']}")
+    print(f"Ineligible vs Rejected:  {agg['ineligible_selection_rate']} / {agg['rejected_selection_rate']}")
+    print(f"Final Fallback Rate:     {agg['final_fallback_rate']}")
+    print(f"Exhaustive Latency:      {avg_ex_lat:.2f} ms")
+    print(f"Learned Latency:         {avg_lr_lat:.2f} ms")
+    print(f"Speedup Factor:          {speedup:.1f}x")
     print("-" * 60)
     print("Top Feature Importances:")
     sorted_fi = sorted(metrics.get("feature_importances", {}).items(), key=lambda x: x[1], reverse=True)[:5]

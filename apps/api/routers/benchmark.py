@@ -16,9 +16,16 @@ from apps.api.models.requests import (
     BenchmarkResultSummary, LearnedRouterPredictRequest,
     LearnedRouterPredictResponse, LearnedRouterMetricsResponse,
 )
+from apps.api.models.domain import CandidateStatus
 from apps.api.services.router import exhaustive_router
 from apps.api.services.profiler import profiler as structural_profiler
 from apps.api.services.learned_router import learned_router
+from apps.api.services.learned_router_eval import (
+    oracle_for,
+    classify_prediction,
+    evaluate_samples,
+    split_dataset,
+)
 from apps.api.services.tokenizer import token_estimator
 from apps.api.config.settings import settings
 
@@ -26,95 +33,23 @@ benchmark_router = APIRouter(prefix="/api/benchmark", tags=["Benchmark"])
 learned_router_router = APIRouter(prefix="/api/learned-router", tags=["Learned Router"])
 
 # ─── Corpus Generation ────────────────────────────────────────────────────────
+#
+# NOTE (STEP 6): The API benchmark uses the SAME canonical, deterministic
+# corpus generator as the CLI benchmark (benchmarks/generate_corpus.py). The
+# previous inline generator produced a DIFFERENT corpus for the same N/seed
+# (its 5th category was "small_scalar", and its payload templates diverged),
+# which made CLI and API headline numbers disagree (e.g. TOON 63.43% CLI vs
+# 62.01% API at N=200 seed=200). Aligning to one generator guarantees parity.
 
 def _generate_corpus(size: int, seed: int) -> list[dict[str, Any]]:
-    """Generate a deterministic synthetic benchmark corpus."""
-    import random
-    rng = random.Random(seed)
+    """Generate the canonical deterministic benchmark corpus (CLI-compatible).
 
-    corpus = []
-    categories = ["flat_tabular", "nested_objects", "deep_nested", "heterogeneous", "small_scalar"]
-    per_category = size // len(categories)
+    Delegates to ``benchmarks.generate_corpus.generate_benchmark_corpus`` so
+    API and CLI results are produced from the identical corpus.
+    """
+    from benchmarks.generate_corpus import generate_benchmark_corpus
 
-    # 1. Flat Tabular (uniform arrays)
-    for i in range(per_category):
-        n_records = rng.randint(5, 50)
-        payload = [
-            {
-                "record_id": f"rec_{rng.randint(1000, 9999)}",
-                "user_id": f"usr_{rng.randint(10000, 99999)}",
-                "timestamp": rng.randint(1700000000, 1730000000),
-                "action": rng.choice(["read", "write", "delete", "query"]),
-                "duration_ms": round(rng.uniform(0.1, 100.0), 2),
-                "cache_hit": rng.choice([True, False]),
-            }
-            for _ in range(n_records)
-        ]
-        corpus.append({"category": "flat_tabular", "payload": payload})
-
-    # 2. Nested Objects
-    for i in range(per_category):
-        payload = {
-            "config": {
-                "model": rng.choice(["gpt-4", "llama-3", "mistral"]),
-                "params": {
-                    "temperature": round(rng.uniform(0.0, 1.5), 2),
-                    "max_tokens": rng.randint(128, 4096),
-                    "top_p": round(rng.uniform(0.8, 1.0), 2),
-                },
-            },
-            "metadata": {
-                "created_at": rng.randint(1700000000, 1730000000),
-                "tags": [rng.choice(["prod", "staging", "dev"])],
-                "version": f"{rng.randint(1, 5)}.{rng.randint(0, 9)}.{rng.randint(0, 9)}",
-            },
-            "results": [
-                {"step": j, "score": round(rng.uniform(0, 1), 4)}
-                for j in range(rng.randint(2, 8))
-            ],
-        }
-        corpus.append({"category": "nested_objects", "payload": payload})
-
-    # 3. Deep Nested
-    for i in range(per_category):
-        depth = rng.randint(5, 8)
-        payload = {"root": True}
-        node = payload
-        for d in range(depth):
-            child = {
-                "level": d + 1,
-                "value": rng.randint(0, 100),
-                "label": f"node_{d}",
-            }
-            node["child"] = child
-            node = child
-        corpus.append({"category": "deep_nested", "payload": payload})
-
-    # 4. Heterogeneous
-    for i in range(per_category):
-        n = rng.randint(3, 15)
-        payload = []
-        for j in range(n):
-            rec_type = rng.choice(["A", "B", "C"])
-            if rec_type == "A":
-                payload.append({"type": "A", "value": rng.randint(0, 1000), "active": True})
-            elif rec_type == "B":
-                payload.append({"type": "B", "label": f"item_{j}", "score": round(rng.uniform(0, 1), 4), "meta": None})
-            else:
-                payload.append({"type": "C", "data": [rng.randint(0, 10) for _ in range(3)]})
-        corpus.append({"category": "heterogeneous", "payload": payload})
-
-    # 5. Small / Scalar-Dominated
-    remaining = size - len(corpus)
-    for i in range(remaining):
-        payload = {
-            "key": rng.choice(["alpha", "beta", "gamma"]),
-            "value": rng.randint(0, 999),
-            "ok": rng.choice([True, False]),
-        }
-        corpus.append({"category": "small_scalar", "payload": payload})
-
-    return corpus
+    return generate_benchmark_corpus(size=size, seed=seed)
 
 
 def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
@@ -125,9 +60,14 @@ def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
     strategies = ["JSON", "Compact JSON", "TOON", "JTON", "ONTO", "Adaptive Router"]
     strategy_results: dict[str, list[float]] = {s: [] for s in strategies}
     fallback_counts: dict[str, int] = {s: 0 for s in strategies}
+    valid_counts: dict[str, int] = {s: 0 for s in strategies}
+    ineligible_counts: dict[str, int] = {s: 0 for s in strategies}
+    rejected_counts: dict[str, int] = {s: 0 for s in strategies}
     category_breakdown: dict[str, dict] = {}
     training_X: list[dict] = []
     training_y: list[str] = []
+    routing_latencies: list[float] = []
+    routing_results: list = []
 
     for item in corpus:
         payload = item["payload"]
@@ -137,6 +77,8 @@ def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
         route_result = exhaustive_router.route(payload)
         selected = route_result.selected_format or "JSON"
         json_tokens = route_result.json_token_baseline or 1
+        routing_latencies.append(route_result.routing_latency_ms)
+        routing_results.append(route_result)
 
         # Store for learned router training
         profile = route_result.profile
@@ -148,6 +90,7 @@ def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
         adaptive_tokens = route_result.token_counts.get(selected, json_tokens)
         savings_pct = token_estimator.estimate_savings_pct(json_tokens, adaptive_tokens)
         strategy_results["Adaptive Router"].append(savings_pct)
+        valid_counts["Adaptive Router"] += 1
         if route_result.final_fallback_used:
             fallback_counts["Adaptive Router"] += 1
 
@@ -168,26 +111,70 @@ def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
             from apps.api.serializers.serialization_manager import SerializationManager
             mgr = SerializationManager()
             cand = mgr.serialize_one(payload, fmt_id)
-            if cand.eligible and cand.encoded:
-                from apps.api.services.validator import validator as v
-                if cand.decoded is not None:
-                    valid, _ = v.validate(payload, cand.decoded)
-                    if valid:
-                        tokens = token_estimator.estimate(cand.encoded)
-                        savings = token_estimator.estimate_savings_pct(json_tokens, tokens)
-                        strategy_results[fmt_id].append(savings)
-                    else:
-                        strategy_results[fmt_id].append(0.0)
-                        fallback_counts[fmt_id] += 1
-                else:
-                    strategy_results[fmt_id].append(0.0)
+            if cand.status == CandidateStatus.INELIGIBLE:
+                # Structurally not applicable (the format's own eligibility logic).
+                ineligible_counts[fmt_id] += 1
+                continue
+            if cand.encoded is None or cand.decoded is None:
+                # Eligible but encode/decode failed -> candidate rejection.
+                rejected_counts[fmt_id] += 1
+                continue
+            from apps.api.services.validator import validator as v
+            valid, _ = v.validate(payload, cand.decoded)
+            if valid:
+                tokens = token_estimator.estimate(cand.encoded)
+                savings = token_estimator.estimate_savings_pct(json_tokens, tokens)
+                strategy_results[fmt_id].append(savings)
+                valid_counts[fmt_id] += 1
             else:
-                strategy_results[fmt_id].append(0.0)
+                # Eligible, encoded/decoded, but strict validation failed.
+                rejected_counts[fmt_id] += 1
 
-    # Train learned router
+    # Train learned router on a DETERMINISTIC 80% holdout; evaluate on the
+    # never-seen 20% (Step 5 — no train/test overlap, real holdout metrics).
+    learned_router_eval = None
     if len(training_X) >= 10:
         try:
-            learned_router.train(training_X, training_y)
+            train_idx, eval_idx = split_dataset(
+                len(corpus), test_size=0.2, random_state=42
+            )
+            learned_router.train(
+                [training_X[i] for i in train_idx],
+                [training_y[i] for i in train_idx],
+            )
+
+            eval_results = []
+            eval_lr_latencies = []
+            eval_ex_latencies = []
+            for i in eval_idx:
+                oracle = oracle_for(routing_results[i])
+                prediction = learned_router.predict(training_X[i])
+                eval_results.append(
+                    classify_prediction(prediction["predicted_format"], oracle)
+                )
+                eval_lr_latencies.append(prediction.get("learned_latency_ms", 0.0))
+                eval_ex_latencies.append(routing_latencies[i])
+            agg = evaluate_samples(eval_results)
+            agg.update({
+                "evaluation_corpus_size": len(eval_idx),
+                "training_corpus_size": len(train_idx),
+                "eval_random_seed": 42,
+                "learned_latency_ms": round(
+                    sum(eval_lr_latencies) / max(len(eval_lr_latencies), 1), 3
+                ),
+                "exhaustive_latency_ms": round(
+                    sum(eval_ex_latencies) / max(len(eval_ex_latencies), 1), 3
+                ),
+            })
+            learned_router.record_evaluation(agg)
+            learned_router_eval = {k: agg[k] for k in (
+                "evaluation_corpus_size", "training_corpus_size", "eval_random_seed",
+                "exact_match_rate", "mean_token_regret", "median_regret_tokens",
+                "mean_regret_pct", "p95_regret_pct", "min_regret_pct", "max_regret_pct",
+                "invalid_selection_rate", "ineligible_selection_rate",
+                "rejected_selection_rate", "eligible_selection_rate",
+                "final_fallback_rate", "learned_latency_ms", "exhaustive_latency_ms",
+            )}
         except Exception as exc:
             pass  # Non-fatal; router metrics will reflect untrained state
 
@@ -209,13 +196,26 @@ def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
 
     results = []
     for strategy, savings_list in strategy_results.items():
+        total = len(corpus)
+        valid_cnt = valid_counts[strategy]
+        ineligible_cnt = ineligible_counts[strategy]
+        rejected_cnt = rejected_counts[strategy]
+        fb_cnt = fallback_counts[strategy]
+
+        # Valid-only compression efficiency (no artificial 0.0 dilution).
         if savings_list:
             mean = round(statistics.mean(savings_list), 2)
             median = round(statistics.median(savings_list), 2)
             std = round(statistics.stdev(savings_list) if len(savings_list) > 1 else 0.0, 2)
         else:
             mean = median = std = 0.0
-        fallback_rate = round(fallback_counts[strategy] / max(len(corpus), 1), 4)
+
+        # Full-corpus applicability/reliability rates; fallback_rate is a
+        # genuine final-fallback metric, never an ineligibility/rejection label.
+        fallback_rate = round(fb_cnt / max(total, 1), 4)
+        validity_rate = round(valid_cnt / max(total, 1), 4)
+        ineligibility_rate = round(ineligible_cnt / max(total, 1), 4)
+        rejection_rate = round(rejected_cnt / max(total, 1), 4)
         results.append({
             "strategy": strategy,
             "mean_reduction": mean,
@@ -223,7 +223,14 @@ def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
             "std_dev": std,
             "fallback_rate": fallback_rate,
             "routing_grade": _grade(mean, fallback_rate),
-            "sample_count": len(savings_list),
+            "sample_count": total,
+            "validity_rate": validity_rate,
+            "ineligibility_rate": ineligibility_rate,
+            "rejection_rate": rejection_rate,
+            "valid_count": valid_cnt,
+            "ineligible_count": ineligible_cnt,
+            "rejected_count": rejected_cnt,
+            "final_fallback_count": fb_cnt,
         })
 
     # Summarize category breakdown
@@ -245,6 +252,7 @@ def _run_benchmark_task(size: int, seed: int, run_id: str) -> dict:
         "category_breakdown": cat_summary,
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "duration_seconds": duration,
+        "learned_router_eval": learned_router_eval,
     }
 
     # Persist results
@@ -324,17 +332,11 @@ async def predict_format(request: LearnedRouterPredictRequest):
     # Learned router prediction
     prediction = learned_router.predict(fv, exhaustive_format)
 
-    # Token regret
-    token_regret = None
-    if (
-        prediction["predicted_format"] != exhaustive_format
-        and prediction["predicted_format"] in exhaustive_result.token_counts
-        and exhaustive_format in exhaustive_result.token_counts
-    ):
-        token_regret = (
-            exhaustive_result.token_counts[prediction["predicted_format"]]
-            - exhaustive_result.token_counts[exhaustive_format]
-        )
+    # Step 5: validity-first, tie-aware oracle comparison. Token regret is
+    # oracle-relative and only defined for strictly-valid predictions.
+    oracle = oracle_for(exhaustive_result)
+    classified = classify_prediction(prediction["predicted_format"], oracle)
+    token_regret = classified["regret_tokens"]
 
     return LearnedRouterPredictResponse(
         predicted_format=prediction["predicted_format"],
@@ -346,6 +348,10 @@ async def predict_format(request: LearnedRouterPredictRequest):
         exhaustive_latency_ms=round(exhaustive_latency, 3),
         feature_vector=fv,
         model_trained=learned_router.is_trained,
+        optimal_selection=classified["is_optimal"],
+        invalid_selection=classified["invalid_selection"],
+        regret_tokens=classified["regret_tokens"],
+        regret_pct=classified["regret_pct"],
     )
 
 
@@ -364,10 +370,22 @@ async def get_learned_router_metrics():
     return LearnedRouterMetricsResponse(
         model_trained=True,
         decision_agreement_rate=m.get("decision_agreement_rate"),
-        mean_token_regret=m.get("mean_token_regret", 0.0),
-        fallback_rate=m.get("fallback_rate", 0.0),
-        learned_latency_ms=m.get("learned_latency_ms", 0.3),
-        exhaustive_latency_ms=m.get("exhaustive_latency_ms", 4.5),
+        mean_token_regret=m.get("mean_token_regret"),
+        fallback_rate=m.get("final_fallback_rate", m.get("fallback_rate", 0.0)),
+        learned_latency_ms=m.get("learned_latency_ms"),
+        exhaustive_latency_ms=m.get("exhaustive_latency_ms"),
         training_corpus_size=m.get("training_corpus_size"),
         model_depth=m.get("model_depth"),
+        exact_match_rate=m.get("exact_match_rate"),
+        median_regret_tokens=m.get("median_regret_tokens"),
+        mean_regret_pct=m.get("mean_regret_pct"),
+        p95_regret_pct=m.get("p95_regret_pct"),
+        min_regret_pct=m.get("min_regret_pct"),
+        max_regret_pct=m.get("max_regret_pct"),
+        invalid_selection_rate=m.get("invalid_selection_rate"),
+        ineligible_selection_rate=m.get("ineligible_selection_rate"),
+        rejected_selection_rate=m.get("rejected_selection_rate"),
+        eligible_selection_rate=m.get("eligible_selection_rate"),
+        evaluation_corpus_size=m.get("evaluation_corpus_size"),
+        eval_random_seed=m.get("eval_random_seed"),
     )

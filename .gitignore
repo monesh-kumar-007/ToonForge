@@ -44,3 +44,11 @@ yarn-error.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Local / repo tooling
+screen.png
+tsconfig.tsbuildinfo
+
+# Ephemeral benchmark outputs (canonical summary is tracked instead)
+benchmarks/results/raw/
+benchmarks/results/aggregated/

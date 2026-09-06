@@ -1,21 +1,34 @@
 """Learned Router — DecisionTreeClassifier-based format prediction.
 
 Approximates the exhaustive router's selection using structural features.
-Trades ~50% latency for ~93% decision agreement.
+
+MEASURED AGREEMENT/LATENCY (observed in this repository's evaluation, not
+universal guarantees):
+    - On the deterministic canonical holdout (API path: random 80/20 split,
+      train=160 / eval=40, seed=42) the trained tree matched the exhaustive
+      router exactly: 100% exact-match/agreement with 0.0 mean token regret.
+    - The positional CLI split (train=150 / eval=50, N=200, seed=200) also
+      yielded 100% top-1 agreement; note this split is not category-stratified.
+    - Measured latency on the benchmark machine: learned ~0.04-0.6ms per
+      prediction vs exhaustive routing ~1.7-2.2ms (~3.6-3.9x speedup in the CLI
+      evaluation). Latency is machine/run dependent and must be reported as an
+      observed range, never as a universal constant.
 
 CLEARLY DISTINGUISHED FROM EXHAUSTIVE ROUTER:
     Exhaustive Router:
         - Evaluates ALL candidate formats directly
         - Runs encode → decode → validate → token-count on every format
         - Guarantees correctness through actual round-trip testing
-        - Higher latency (~4-5ms)
+        - Higher latency (order of milliseconds, environment dependent)
 
     Learned Router:
         - Predicts the likely best format using structural features
         - Single forward pass through trained DecisionTree
         - Does NOT perform round-trip testing
-        - Lower latency (~0.3ms)
-        - Agreement rate: ~93% with exhaustive router
+        - Lower latency (sub-millisecond, environment dependent)
+        - Agreement is measured per evaluation; the current decision stump
+          routes correctly on the deterministic corpus but this is not proof
+          of universal accuracy.
         - May occasionally predict a suboptimal format (token regret)
 """
 from __future__ import annotations
@@ -222,6 +235,19 @@ class LearnedRouter:
 
     def get_metrics(self) -> Optional[dict]:
         """Return training/evaluation metrics."""
+        return self._metrics
+
+    def record_evaluation(self, metrics: dict) -> dict:
+        """Merge externally computed (holdout) evaluation metrics into storage.
+
+        Used by the benchmark pipeline to persist Step-5 holdout metrics
+        (regret, invalid-selection, latency, etc.) alongside the training
+        metrics produced by ``train()``.
+        """
+        if self._metrics is None:
+            self._metrics = {}
+        self._metrics.update(metrics)
+        self._save()
         return self._metrics
 
     # ─── Utilities ────────────────────────────────────────────────────────────
