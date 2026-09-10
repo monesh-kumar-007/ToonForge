@@ -43,12 +43,10 @@ export default function BenchmarkLabPage() {
     );
   };
 
-  const applyResponse = (data: BenchmarkResponse) => {
-    setBenchmarkData(data);
-    if (data.results?.length) setResults(data.results);
-    if (data.corpus_size) setCorpusSize(data.corpus_size);
-    if (data.seed) setSeed(data.seed);
-  };
+  const applyResponse = (data: BenchmarkResultsResponse) => {
+  setBenchmarkData(data);
+  if (data.results?.length) setResults(data.results);
+};
 
   const fetchResults = async () => {
     try {
