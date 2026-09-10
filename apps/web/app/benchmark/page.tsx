@@ -1,7 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { runBenchmark, getBenchmarkResults, BenchmarkResponse, BenchmarkStrategyResult } from '@/lib/api';
+
+import {
+  runBenchmark,
+  getBenchmarkResults,
+  BenchmarkResponse,
+  BenchmarkResultsResponse,
+  BenchmarkStrategyResult,
+} from '@/lib/api';
 
 const STATIC_RESULTS: BenchmarkStrategyResult[] = [
   { strategy: 'Always JSON', mean_reduction: 0.0, median_reduction: 0.0, std_dev: 0.0, fallback_rate: 0.0, routing_grade: 'BASELINE', sample_count: 200 },
