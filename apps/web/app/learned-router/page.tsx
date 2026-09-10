@@ -11,9 +11,12 @@ const DEFAULT_PAYLOAD = {
 
 const STATIC_PREDICTION: LearnedRouterPrediction = {
   predicted_format: 'COMPACT JSON',
+  exhaustive_format: 'COMPACT JSON',
   confidence: 0.962,
   model_trained: true,
   learned_latency_ms: 0.29,
+  exhaustive_latency_ms: 0.41,
+  feature_vector: {},
   agreement: true,
   token_regret: 0,
 };
