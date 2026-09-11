@@ -1,9 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 
 export default function ResearchPage() {
   const [copied, setCopied] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
+
+  const REPRO_COMMAND = 'python benchmarks/run_benchmark.py --size 200 --seed 200';
+
+  const scrollToBibtex = (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    document
+      .getElementById('bibtex-drawer')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleCopyCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(REPRO_COMMAND);
+      setCopyStatus('copied');
+      setTimeout(() => setCopyStatus('idle'), 2000);
+    } catch {
+      setCopyStatus('error');
+      setTimeout(() => setCopyStatus('idle'), 2000);
+    }
+  };
 
   const handleCopy = async () => {
     const bibtexEl = document.getElementById('bibtex-text');
@@ -42,6 +63,7 @@ export default function ResearchPage() {
           <a
             className="group flex items-center gap-1.5 px-space-sm py-1.5 rounded bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors shadow-sm"
             href="#bibtex-drawer"
+            onClick={scrollToBibtex}
           >
             <span className="material-symbols-outlined text-[16px] text-primary">
               description
@@ -573,7 +595,7 @@ export default function ResearchPage() {
 
       {/* Interactive Academic BibTeX Drawer / Citation Utility */}
       <div
-        className="rounded-xl bg-surface-container p-space-lg shadow-lg space-y-space-md"
+        className="rounded-xl bg-surface-container p-space-lg shadow-lg space-y-space-md scroll-mt-20"
         id="bibtex-drawer"
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs">
@@ -622,34 +644,45 @@ export default function ResearchPage() {
         </div>
         {/* Supplementary Research Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-space-sm pt-space-xs text-on-surface-variant font-mono-data-sm text-mono-data-sm">
-          <div className="flex items-center gap-space-md">
-            <a
-              className="hover:text-primary transition-colors flex items-center gap-1"
-              href="#"
+          <div className="flex flex-wrap items-center gap-space-md">
+            <span
+              className="flex items-center gap-1 text-outline"
+              title="No manuscript PDF is published yet. Use the BibTeX citation above."
             >
               <span className="material-symbols-outlined text-[15px]">
-                download
+                hourglass_empty
               </span>
-              <span>Download PDF (Preprint)</span>
-            </a>
+              <span>PDF — in preparation</span>
+            </span>
             <a
               className="hover:text-primary transition-colors flex items-center gap-1"
-              href="#"
+              href="/benchmark"
             >
               <span className="material-symbols-outlined text-[15px]">
-                terminal
+                dataset
               </span>
               <span>Dataset Archetypes (N=200 JSON)</span>
             </a>
-            <a
-              className="hover:text-primary transition-colors flex items-center gap-1"
-              href="#"
+            <button
+              type="button"
+              onClick={handleCopyCommand}
+              title={`Local reproduction command:\n${REPRO_COMMAND}`}
+              className="bg-transparent p-0 border-0 hover:text-primary transition-colors flex items-center gap-1 cursor-pointer font-mono-data-sm text-mono-data-sm"
             >
               <span className="material-symbols-outlined text-[15px]">
-                code
+                {copyStatus === 'copied' ? 'check' : 'terminal'}
               </span>
-              <span>Reproduction Harness</span>
-            </a>
+              <span>
+                {copyStatus === 'copied'
+                  ? 'Copied to Clipboard'
+                  : copyStatus === 'error'
+                  ? 'Copy Failed'
+                  : 'Reproduction Harness'}
+              </span>
+            </button>
+            <code className="hidden md:inline-flex items-center gap-1 px-space-2xs py-0.5 rounded bg-surface-container-high text-outline font-mono-data-sm text-mono-data-sm">
+              python benchmarks/run_benchmark.py --size 200 --seed 200
+            </code>
           </div>
           <div className="text-outline font-label-caps text-label-caps uppercase">
             Open-Access Research License (CC BY 4.0)

@@ -84,3 +84,21 @@ The TOONFORGE FastAPI backend exposes interactive endpoints at `http://localhost
 - **Method**: `POST /api/reliability/adversarial`
 - **Body**: `{}`
 - **Response**: Executes adversarial test suite and returns audit results across numeric string safety, null handling, and delimiter immunity.
+
+---
+
+## Web Dashboard Integration
+
+The Next.js dashboard (`apps/web`) reaches the API through a single client
+(`apps/web/lib/api.ts`) using the `NEXT_PUBLIC_API_URL` environment variable
+(local default: `http://localhost:8000`). Set it to the deployed backend public
+URL (e.g. `https://toonforge-api-23n6.onrender.com`) at build time.
+
+## CORS
+
+The API allows only explicit origins: `http://localhost:3000`,
+`http://127.0.0.1:3000`, and the `FRONTEND_URL` environment variable
+(`apps/api/config/settings.py`). Deployed dashboards must be added via
+`FRONTEND_URL` on the backend host — CORS is explicit-origin only, no wildcard.
+`NEXT_PUBLIC_API_URL` (frontend) and `FRONTEND_URL` (backend) must reference the
+exact public origins without trailing slashes.

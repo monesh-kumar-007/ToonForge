@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { Header } from '@/components/layout/Header';
+import { NavigationShell } from '@/components/layout/NavigationShell';
 
 export const metadata: Metadata = {
   title: 'TOONFORGE — Adaptive Structure-Aware Routing for LLM Context Serialization',
@@ -29,13 +28,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-background text-on-surface antialiased min-h-screen selection:bg-primary-container selection:text-on-primary-container">
-        <Sidebar />
-        <div className="pl-sidebar-width min-h-screen flex flex-col">
-          <Header />
-          <main className="w-full pt-16 bg-surface flex-1">
-            {children}
-          </main>
-        </div>
+        <NavigationShell>{children}</NavigationShell>
       </body>
     </html>
   );

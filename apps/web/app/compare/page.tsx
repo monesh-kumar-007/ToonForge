@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { serializeAll, CandidateResult } from '@/lib/api';
+import ApiErrorBanner from '@/components/ApiErrorBanner';
+import DataSourceBadge from '@/components/DataSourceBadge';
 
 type FormatKey = 'JSON' | 'COMPACT JSON' | 'TOON' | 'JTON' | 'ONTO';
 
@@ -127,32 +129,69 @@ export default function FormatComparisonPage() {
     useState<CandidateResult[]>(MOCK_CANDIDATES);
 
   const [auditOpen, setAuditOpen] = useState<boolean>(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [liveCandidates, setLiveCandidates] = useState<CandidateResult[] | null>(null);
+  const [fetchState, setFetchState] = useState<'loading' | 'live' | 'error'>('loading');
 
   useEffect(() => {
     let cancelled = false;
 
+    setApiError(null);
+
     serializeAll(SAMPLE_PAYLOAD)
       .then((res) => {
-        if (
-          !cancelled &&
-          res.candidates?.length
-        ) {
+        if (cancelled) return;
+
+        if (res.candidates?.length) {
+          setLiveCandidates(res.candidates);
+          setFetchState('live');
           setCandidates(
             mergeCandidates(res.candidates)
           );
+        } else {
+          setFetchState('error');
+          setApiError(
+            'The API returned no candidate data. Showing demo/reference values.'
+          );
         }
       })
-      .catch(() => {
-        /*
-         * Keep static fallback values so the page
-         * still renders if the backend is unavailable.
-         */
+      .catch((err) => {
+        if (cancelled) return;
+
+        setFetchState('error');
+        setApiError(
+          err instanceof Error ? err.message : 'Unexpected API error.'
+        );
       });
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const isLiveFormat = (ids: string[]): boolean =>
+    liveCandidates?.some((c) => ids.includes(c.format_id)) ?? false;
+
+  const badgeState =
+    fetchState === 'live'
+      ? 'live'
+      : fetchState === 'error'
+      ? 'error'
+      : 'loading';
+
+  const badgeLabel =
+    fetchState === 'live'
+      ? 'Live API results'
+      : fetchState === 'error'
+      ? 'API unavailable — demo/reference data'
+      : 'Fetching live data…';
+
+  const BackfillRefTag = ({ ids }: { ids: string[] }) =>
+    fetchState === 'live' && !isLiveFormat(ids) ? (
+      <span className="inline-flex items-center gap-1 font-mono-data-sm text-[10px] text-outline bg-surface-container-high/60 border border-outline-variant/30 px-1 py-0.5 rounded">
+        reference
+      </span>
+    ) : null;
 
   const candFor = (
     key: FormatKey
@@ -255,6 +294,10 @@ export default function FormatComparisonPage() {
       {/* ========================================================= */}
 
       <div className="p-space-lg flex flex-col gap-space-md">
+        <ApiErrorBanner
+          message={apiError}
+          onDismiss={() => setApiError(null)}
+        />
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-space-md">
           <div className="flex flex-col gap-space-2xs">
             <div className="flex items-center gap-space-xs">
@@ -269,6 +312,8 @@ export default function FormatComparisonPage() {
               <span className="font-mono-data-sm text-mono-data-sm text-outline">
                 EVAL_ID: 0x9F41C
               </span>
+
+              <DataSourceBadge state={badgeState} label={badgeLabel} />
             </div>
 
             <h1 className="font-headline-xl text-headline-xl text-on-surface tracking-tight">
@@ -377,8 +422,8 @@ export default function FormatComparisonPage() {
                 )}
               </div>
 
-              <span className="font-headline-md text-headline-md text-on-surface">
-                JSON
+              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+                JSON <BackfillRefTag ids={ALIASES.JSON} />
               </span>
 
               <span className="font-mono-data-sm text-mono-data-sm text-outline">
@@ -440,8 +485,8 @@ export default function FormatComparisonPage() {
                 )}
               </div>
 
-              <span className="font-headline-md text-headline-md text-on-surface">
-                Compact JSON
+              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+                Compact JSON <BackfillRefTag ids={ALIASES['COMPACT JSON']} />
               </span>
 
               <span className="font-mono-data-sm text-mono-data-sm text-outline">
@@ -503,8 +548,8 @@ export default function FormatComparisonPage() {
                 )}
               </div>
 
-              <span className="font-headline-md text-headline-md text-on-surface">
-                TOON
+              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+                TOON <BackfillRefTag ids={ALIASES.TOON} />
               </span>
 
               <span className="font-mono-data-sm text-mono-data-sm text-outline-variant">
@@ -584,8 +629,8 @@ export default function FormatComparisonPage() {
                 )}
               </div>
 
-              <span className="font-headline-md text-headline-md text-on-surface">
-                JTON
+              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+                JTON <BackfillRefTag ids={ALIASES.JTON} />
               </span>
 
               <span className="font-mono-data-sm text-mono-data-sm text-outline-variant">
@@ -651,8 +696,8 @@ export default function FormatComparisonPage() {
                 )}
               </div>
 
-              <span className="font-headline-md text-headline-md text-on-surface">
-                ONTO
+              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+                ONTO <BackfillRefTag ids={ALIASES.ONTO} />
               </span>
 
               <span className="font-mono-data-sm text-mono-data-sm text-outline-variant">

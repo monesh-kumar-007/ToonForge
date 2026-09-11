@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { runAdversarialSuite, AdversarialResponse, AdversarialCase } from '@/lib/api';
+import ApiErrorBanner from '@/components/ApiErrorBanner';
+import DataSourceBadge from '@/components/DataSourceBadge';
 
 const STATIC_CASES: AdversarialCase[] = [
   {
@@ -28,6 +30,8 @@ export default function ReliabilityPage() {
   const [rejectionCount, setRejectionCount] = useState(0);
   const [fallbackCount, setFallbackCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [fetchState, setFetchState] = useState<'loading' | 'live' | 'error'>('loading');
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const applyResponse = useCallback((data: AdversarialResponse) => {
     if (data.cases && data.cases.length > 0) {
@@ -38,13 +42,26 @@ export default function ReliabilityPage() {
     setFallbackCount(data.fallback_count);
   }, []);
 
+  const scrollToAdversarialSuite = useCallback(() => {
+    document
+      .getElementById('adversarial-suite')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   const handleRunAudit = useCallback(async () => {
     setLoading(true);
+    setFetchState('loading');
+    setApiError(null);
+
     try {
       const data = await runAdversarialSuite();
+      setFetchState('live');
       applyResponse(data);
-    } catch {
-      // keep static values on failure
+    } catch (err) {
+      setFetchState('error');
+      setApiError(
+        err instanceof Error ? err.message : 'Unexpected API error.'
+      );
     } finally {
       setLoading(false);
     }
@@ -58,6 +75,10 @@ export default function ReliabilityPage() {
 
   return (
     <div className="relative w-full px-space-xl py-space-xl overflow-hidden">
+      <ApiErrorBanner
+        message={apiError}
+        onDismiss={() => setApiError(null)}
+      />
       {/* Ambient Emissive Background Light */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-secondary-container/10 rounded-full blur-3xl pointer-events-none -z-10"></div>
       <div className="absolute top-48 left-12 w-80 h-80 bg-error/5 rounded-full blur-3xl pointer-events-none -z-10"></div>
@@ -118,7 +139,10 @@ export default function ReliabilityPage() {
       </div>
 
       {/* Section 1: ADVERSARIAL VALIDATION TRACE */}
-      <div className="w-full flex flex-col gap-space-md mb-space-2xl">
+      <div
+        id="adversarial-suite"
+        className="w-full flex flex-col gap-space-md mb-space-2xl scroll-mt-20"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-space-xs">
             <span className="h-2 w-2 rounded-full bg-secondary"></span>
@@ -132,7 +156,23 @@ export default function ReliabilityPage() {
               <span className="text-on-surface">TRACE-ADV-9041X</span>
             </span>
             <span className="text-outline-variant">/</span>
-            <span className="text-secondary">REALTIME_EXEC</span>
+            {fetchState === 'live' && <span className="text-secondary">REALTIME_EXEC</span>}
+            <DataSourceBadge
+              state={
+                fetchState === 'live'
+                  ? 'live'
+                  : fetchState === 'error'
+                  ? 'error'
+                  : 'loading'
+              }
+              label={
+                fetchState === 'live'
+                  ? 'Live trace'
+                  : fetchState === 'error'
+                  ? 'API unavailable — demo trace shown'
+                  : 'Running suite…'
+              }
+            />
           </div>
         </div>
 
@@ -149,6 +189,7 @@ export default function ReliabilityPage() {
               <span className="font-mono-data-sm text-mono-data-sm text-outline tracking-wider">
                 TRACE_VIEWER // CANDIDATE_EVALUATION
               </span>
+              <DataSourceBadge state="demo" label="Demo case" />
             </div>
             <div className="flex items-center gap-space-xs">
               <span className="px-space-2xs py-0.5 rounded bg-surface-container-high text-outline font-label-caps text-label-caps uppercase">
@@ -537,13 +578,13 @@ export default function ReliabilityPage() {
             </div>
           </div>
           <div className="flex items-center gap-space-xs shrink-0 self-end md:self-center">
-            <a
+            <button
+              onClick={scrollToAdversarialSuite}
               className="px-space-md py-space-xs rounded bg-surface-container hover:bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm transition-colors flex items-center gap-1.5 shadow-sm"
-              href="#"
             >
               <span className="material-symbols-outlined text-[16px]">menu_book</span>
               <span>Read Validation Spec</span>
-            </a>
+            </button>
             <button
               onClick={handleRunAudit}
               disabled={loading}

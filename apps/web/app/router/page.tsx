@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { routePayload, RouteResponse } from '@/lib/api';
+import ApiErrorBanner from '@/components/ApiErrorBanner';
+import DataSourceBadge from '@/components/DataSourceBadge';
 
 const SAMPLE_PAYLOAD = {
   user_id: 'usr_88201a',
@@ -41,6 +43,8 @@ export default function AdaptiveRouterDecisionPage() {
   const [evaluatedCount, setEvaluatedCount] = useState<number>(5);
   const [selectedActiveLabel, setSelectedActiveLabel] = useState<string>('Selected Format Active');
   const [loading, setLoading] = useState<boolean>(false);
+  const [hasRouted, setHasRouted] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const [candidates, setCandidates] = useState<CandidateUI[]>([
     {
@@ -85,10 +89,31 @@ export default function AdaptiveRouterDecisionPage() {
     },
   ]);
 
+  const dataState = loading
+    ? 'loading'
+    : hasRouted
+    ? 'live'
+    : apiError
+    ? 'error'
+    : 'idle';
+
+  const dataStateLabel =
+    dataState === 'live'
+      ? 'Live route result'
+      : dataState === 'loading'
+      ? 'Routing…'
+      : dataState === 'error'
+      ? hasRouted
+        ? 'API unavailable — showing last result'
+        : 'API unavailable — showing demo values'
+      : 'Awaiting live route';
+
   const runRouter = async () => {
     setLoading(true);
+    setApiError(null);
     try {
       const res = await routePayload(SAMPLE_PAYLOAD);
+      setHasRouted(true);
       setRoutingLatencyMs(res.routing_latency_ms);
       setWinnerFormat(res.selected_format || 'Compact JSON');
       setSerializedOutput(res.serialized_output || serializedOutput);
@@ -120,7 +145,9 @@ export default function AdaptiveRouterDecisionPage() {
         setSerializedOutput(winner.encoded);
       }
     } catch (err) {
-      // Keep static values offline
+      setApiError(
+        err instanceof Error ? err.message : 'Unexpected API error.'
+      );
     } finally {
       setLoading(false);
     }
@@ -148,21 +175,28 @@ export default function AdaptiveRouterDecisionPage() {
 
   return (
     <div className="p-space-lg space-y-space-xl max-w-7xl mx-auto w-full">
+      <ApiErrorBanner
+        message={apiError}
+        onDismiss={() => setApiError(null)}
+      />
       {/* Top Execution Status Bar & Telemetry Meta */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-space-md pb-space-md border-b-0">
         <div className="space-y-space-3xs">
           <div className="flex items-center gap-space-xs">
             <span className="font-label-caps text-label-caps text-secondary uppercase tracking-widest">Inference Execution #0x8F94</span>
             <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-ping"></span>
-            <span className="font-mono-data-sm text-mono-data-sm text-outline">Pipeline Latency: {routingLatencyMs.toFixed(2)}ms</span>
+            <span className="font-mono-data-sm text-mono-data-sm text-outline">Pipeline Latency: {routingLatencyMs.toFixed(2)}ms{hasRouted ? '' : ' (reference)'}</span>
           </div>
           <h1 className="font-headline-xl text-headline-xl text-on-surface tracking-tight">Adaptive Routing Decision</h1>
           <p className="font-body-md text-body-md text-on-surface-variant">Evaluating eligible representations while prioritizing semantic preservation.</p>
         </div>
         <div className="flex items-center gap-space-xs self-start md:self-auto">
+          <DataSourceBadge state={dataState} label={dataStateLabel} />
           <div className="px-space-sm py-space-2xs rounded bg-surface-container-high flex items-center gap-space-xs shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-secondary"></span>
-            <span className="font-label-caps text-label-caps text-on-surface font-semibold tracking-wider">Evaluation Complete · Round-trip Verified</span>
+            <span className={`w-2 h-2 rounded-full ${hasRouted ? 'bg-secondary' : 'bg-outline-variant'}`}></span>
+            <span className="font-label-caps text-label-caps text-on-surface font-semibold tracking-wider">
+              {loading ? 'ROUTING…' : hasRouted ? 'Evaluation Complete · Round-trip Verified' : 'Awaiting Live Evaluation'}
+            </span>
           </div>
           <button
             onClick={runRouter}
@@ -467,7 +501,7 @@ export default function AdaptiveRouterDecisionPage() {
                 </div>
               </div>
               {/* Right Telemetry Metrics Grid */}
-              <div className="grid grid-cols-2 gap-space-sm min-w-[280px]">
+              <div className="grid grid-cols-2 gap-space-sm min-w-0 lg:min-w-[280px]">
                 <div className="p-space-md rounded-xl bg-surface-container-low flex flex-col gap-space-3xs shadow-inner">
                   <span className="font-label-caps text-label-caps text-outline uppercase">Context Payload</span>
                   <div className="flex items-baseline gap-1">

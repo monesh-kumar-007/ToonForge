@@ -1,24 +1,82 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+export class ApiError extends Error {
+  readonly status: number | null;
+  readonly detail: string | null;
+  readonly url: string;
+
+  constructor(
+    message: string,
+    options: {
+      status?: number | null;
+      detail?: string | null;
+      url: string;
+    } = { url: API_BASE_URL }
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = options.status ?? null;
+    this.detail = options.detail ?? null;
+    this.url = options.url;
+  }
+}
+
 async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options?.headers || {}),
-    },
-  });
+  const url = `${API_BASE_URL}${path}`;
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `API request failed: ${response.status}`);
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options?.headers || {}),
+      },
+    });
+  } catch {
+    throw new ApiError(
+      `Unable to reach the TOONFORGE API at ${API_BASE_URL}. ` +
+        'Check that the backend is running and that NEXT_PUBLIC_API_URL is set correctly for production.',
+      { url }
+    );
   }
 
-  return response.json();
+  if (!response.ok) {
+    let detail: string | null = null;
+
+    const body: unknown = await response.json().catch(() => null);
+
+    if (typeof body === 'object' && body !== null && 'detail' in body) {
+      const maybeDetail = (body as { detail: unknown }).detail;
+      if (typeof maybeDetail === 'string') {
+        detail = maybeDetail;
+      }
+    }
+
+    if (detail === null) {
+      const text = await response.text().catch(() => null);
+      if (text) detail = text;
+    }
+
+    throw new ApiError(
+      `API error (HTTP ${response.status})${detail ? `: ${detail}` : '.'}`,
+      { status: response.status, detail, url }
+    );
+  }
+
+  try {
+    return (await response.json()) as T;
+  } catch {
+    throw new ApiError(
+      `Unexpected response from the TOONFORGE API (HTTP ${response.status}).`,
+      { status: response.status, url }
+    );
+  }
 }
 
 // ─── Candidate ──────────────────────────────────────────────────────────────

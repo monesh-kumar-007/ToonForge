@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { predictLearnedRouter, LearnedRouterPrediction } from '@/lib/api';
+import ApiErrorBanner from '@/components/ApiErrorBanner';
+import DataSourceBadge from '@/components/DataSourceBadge';
 
 const DEFAULT_PAYLOAD = {
   app: 'gateway',
@@ -24,17 +26,45 @@ const STATIC_PREDICTION: LearnedRouterPrediction = {
 export default function LearnedRouterPage() {
   const [prediction, setPrediction] = useState<LearnedRouterPrediction>(STATIC_PREDICTION);
   const [loading, setLoading] = useState<boolean>(false);
+  const [hasPredicted, setHasPredicted] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const agreement = prediction.agreement !== false ? 'MATCH' : 'DIVERGED';
   const confidence = `${(prediction.confidence * 100).toFixed(1)}%`;
 
+  const dataState = loading
+    ? 'loading'
+    : hasPredicted
+    ? 'live'
+    : apiError
+    ? 'error'
+    : 'idle';
+
+  const dataStateLabel =
+    dataState === 'live'
+      ? 'Live prediction'
+      : dataState === 'loading'
+      ? 'Predicting…'
+      : dataState === 'error'
+      ? hasPredicted
+        ? 'API unavailable — showing last prediction'
+        : 'API unavailable — showing reference example'
+      : 'Pre-run reference example';
+
   const runPrediction = async () => {
     setLoading(true);
+    setApiError(null);
+
     try {
       const res = await predictLearnedRouter(DEFAULT_PAYLOAD);
+      setHasPredicted(true);
       setPrediction(res);
     } catch (err) {
       console.error('Learned router predict error:', err);
+
+      setApiError(
+        err instanceof Error ? err.message : 'Unexpected API error.'
+      );
     } finally {
       setLoading(false);
     }
@@ -43,6 +73,10 @@ export default function LearnedRouterPage() {
   return (
     <main className="w-full pt-16 bg-surface flex-1 relative w-full overflow-hidden">
       <div className="relative w-full overflow-hidden">
+        <ApiErrorBanner
+          message={apiError}
+          onDismiss={() => setApiError(null)}
+        />
         <div className="absolute -top-32 left-1/4 w-96 h-96 bg-primary-container/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute top-48 right-12 w-80 h-80 bg-secondary/5 rounded-full blur-3xl pointer-events-none"></div>
         {/* Section: Header Strip & Context */}
@@ -60,6 +94,7 @@ export default function LearnedRouterPage() {
               </p>
             </div>
             <div className="flex items-center gap-space-xs self-start md:self-auto">
+              <DataSourceBadge state={dataState} label={dataStateLabel} />
               <div className="px-space-sm py-space-xs rounded bg-surface-container-low flex items-center gap-space-xs">
                 <span className="h-2 w-2 rounded-full bg-secondary animate-ping"></span>
                 <span className="font-mono-data-sm text-mono-data-sm text-on-surface">MODEL: DECISION_TREE_CLF</span>
@@ -508,10 +543,13 @@ export default function LearnedRouterPage() {
               </div>
             </div>
             <div className="flex items-center gap-space-xs self-end md:self-auto shrink-0">
-              <a className="px-space-sm py-space-xs rounded bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm hover:bg-surface-container-highest transition-colors flex items-center gap-space-2xs" href="#">
-                <span>Download Weights (.onnx)</span>
-                <span className="material-symbols-outlined text-[14px]">download</span>
-              </a>
+              <span
+                className="px-space-sm py-space-xs rounded bg-surface-container-high text-outline font-mono-data-sm text-mono-data-sm flex items-center gap-space-2xs border border-outline-variant/20"
+                title="No ONNX export exists. The trained artifact is a scikit-learn pickle served by the API."
+              >
+                <span className="material-symbols-outlined text-[14px]">description</span>
+                <span>Model artifact: sklearn pickle (.pkl)</span>
+              </span>
             </div>
           </div>
         </div>

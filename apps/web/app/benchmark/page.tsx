@@ -9,6 +9,8 @@ import {
   BenchmarkResultsResponse,
   BenchmarkStrategyResult,
 } from '@/lib/api';
+import ApiErrorBanner from '@/components/ApiErrorBanner';
+import DataSourceBadge from '@/components/DataSourceBadge';
 
 const STATIC_RESULTS: BenchmarkStrategyResult[] = [
   {
@@ -95,6 +97,9 @@ export default function BenchmarkLabPage() {
   const [running, setRunning] = useState<boolean>(false);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [viewMode, setViewMode] = useState<string>('reduction');
+  const [liveLoaded, setLiveLoaded] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'shared' | 'copied' | 'error'>('idle');
 
   const maxReduction = Math.max(
     ...results.map((r) => r.mean_reduction)
@@ -137,6 +142,7 @@ export default function BenchmarkLabPage() {
     data: BenchmarkResponse | BenchmarkResultsResponse
   ) => {
     setBenchmarkData(data);
+    setLiveLoaded(true);
 
     if (data.results?.length) {
       setResults(data.results);
@@ -152,6 +158,8 @@ export default function BenchmarkLabPage() {
   };
 
   const fetchResults = async () => {
+    setApiError(null);
+
     try {
       const data = await getBenchmarkResults();
 
@@ -160,11 +168,16 @@ export default function BenchmarkLabPage() {
       }
     } catch (err) {
       console.error('Failed to get benchmark data:', err);
+
+      setApiError(
+        err instanceof Error ? err.message : 'Unexpected API error.'
+      );
     }
   };
 
   const handleRunBenchmark = async () => {
     setRunning(true);
+    setApiError(null);
 
     try {
       const data = await runBenchmark(corpusSize, seed);
@@ -172,6 +185,10 @@ export default function BenchmarkLabPage() {
       applyResponse(data);
     } catch (err) {
       console.error('Benchmark run failed:', err);
+
+      setApiError(
+        err instanceof Error ? err.message : 'Unexpected API error.'
+      );
     } finally {
       setRunning(false);
     }
@@ -180,6 +197,108 @@ export default function BenchmarkLabPage() {
   useEffect(() => {
     fetchResults();
   }, []);
+
+  const escapeCsvCell = (value: string | number): string => {
+    const str = String(value);
+    if (/[",\r\n]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
+  const handleExportCsv = () => {
+    if (results.length === 0) return;
+
+    const header = [
+      'strategy',
+      'mean_reduction',
+      'median_reduction',
+      'std_dev',
+      'fallback_rate',
+      'routing_grade',
+      'sample_count',
+    ];
+
+    const rows = results.map((r) => [
+      escapeCsvCell(r.strategy),
+      escapeCsvCell(r.mean_reduction),
+      escapeCsvCell(r.median_reduction),
+      escapeCsvCell(r.std_dev),
+      escapeCsvCell(r.fallback_rate),
+      escapeCsvCell(r.routing_grade),
+      escapeCsvCell(r.sample_count),
+    ]);
+
+    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'toonforge-benchmark-results.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const resetShareStatus = () => {
+    setTimeout(() => setShareStatus('idle'), 2500);
+  };
+
+  const handleShare = async () => {
+    const shareUrl = window.location.href;
+    const shareText = 'TOONFORGE Benchmark';
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareText,
+          text: `${shareText} — token-reduction results across serialization strategies.`,
+          url: shareUrl,
+        });
+        setShareStatus('shared');
+        resetShareStatus();
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        try {
+          await navigator.clipboard.writeText(shareUrl);
+          setShareStatus('copied');
+          resetShareStatus();
+        } catch {
+          setShareStatus('error');
+          resetShareStatus();
+        }
+      }
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus('copied');
+      resetShareStatus();
+    } catch {
+      setShareStatus('error');
+      resetShareStatus();
+    }
+  };
+
+  const dataState = running
+    ? 'loading'
+    : liveLoaded
+    ? 'live'
+    : apiError
+    ? 'error'
+    : 'reference';
+
+  const dataStateLabel =
+    dataState === 'loading'
+      ? 'Running benchmark…'
+      : dataState === 'live'
+      ? 'Live API results'
+      : dataState === 'error'
+      ? 'API unavailable — static reference shown'
+      : 'Static reference';
 
   const barWidth = (mean: number) => {
     const max = maxReduction || 33.3;
@@ -208,6 +327,11 @@ export default function BenchmarkLabPage() {
   return (
     <div className="w-full px-space-lg py-space-md flex flex-col gap-space-lg">
 
+      <ApiErrorBanner
+        message={apiError}
+        onDismiss={() => setApiError(null)}
+      />
+
       {/* Laboratory Sub-header & Micro Telemetry Banner */}
       <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-space-md">
         <div className="flex flex-col gap-space-3xs">
@@ -220,8 +344,12 @@ export default function BenchmarkLabPage() {
             <span className="w-1 h-1 rounded-full bg-outline-variant"></span>
 
             <span className="font-mono-data-sm text-mono-data-sm text-outline">
-              RUN_HASH: {benchmarkData?.run_id || `0x9F42A_SEED${seed}`}
+              {liveLoaded
+                ? `RUN_HASH: ${benchmarkData?.run_id ?? 'N/A'}`
+                : `CANONICAL_REF_N${corpusSize}_SEED${seed}`}
             </span>
+
+            <DataSourceBadge state={dataState} label={dataStateLabel} />
           </div>
 
           <h1 className="font-headline-xl text-headline-xl text-on-surface tracking-tight">
@@ -1456,7 +1584,14 @@ export default function BenchmarkLabPage() {
           <div className="flex items-center gap-space-xs">
 
             <button
-              className="flex-1 bg-primary text-on-primary hover:bg-primary/90 transition-all font-mono-data-sm text-mono-data-sm py-1.5 px-space-sm rounded font-medium shadow-sm flex items-center justify-center gap-1"
+              onClick={handleExportCsv}
+              disabled={results.length === 0}
+              title={
+                results.length === 0
+                  ? 'No benchmark results available to export.'
+                  : 'Download the currently displayed benchmark results as CSV.'
+              }
+              className="flex-1 bg-primary text-on-primary hover:bg-primary/90 transition-all font-mono-data-sm text-mono-data-sm py-1.5 px-space-sm rounded font-medium shadow-sm flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined text-[14px]">
                 download
@@ -1466,14 +1601,31 @@ export default function BenchmarkLabPage() {
             </button>
 
             <button
-              className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface transition-all font-mono-data-sm text-mono-data-sm py-1.5 px-space-sm rounded flex items-center justify-center"
+              onClick={handleShare}
+              title="Share this benchmark page"
+              aria-label="Share the TOONFORGE Benchmark page"
+              className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface transition-all font-mono-data-sm text-mono-data-sm py-1.5 px-space-sm rounded flex items-center justify-center gap-1"
             >
               <span className="material-symbols-outlined text-[14px]">
-                share
+                {shareStatus === 'copied' || shareStatus === 'shared'
+                  ? 'check'
+                  : shareStatus === 'error'
+                  ? 'error'
+                  : 'share'}
               </span>
+              {shareStatus === 'copied' ? 'Link Copied' : shareStatus === 'shared' ? 'Shared' : ''}
             </button>
 
           </div>
+
+          <span
+            aria-live="polite"
+            className="font-mono-data-sm text-mono-data-sm text-outline min-h-[1rem]"
+          >
+            {shareStatus === 'error'
+              ? 'Share unavailable — clipboard blocked by browser.'
+              : ''}
+          </span>
         </div>
 
       </div>

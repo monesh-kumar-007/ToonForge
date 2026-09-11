@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { profilePayload, ProfileResponse } from '@/lib/api';
+import ApiErrorBanner from '@/components/ApiErrorBanner';
+import DataSourceBadge from '@/components/DataSourceBadge';
 
 interface Preset {
   type: string;
@@ -182,9 +184,27 @@ export default function AnalyzePage() {
   const [mArchetype, setMArchetype] = useState('');
   const [mSignals, setMSignals] = useState<{ signal: string; description: string; value?: string }[]>([]);
   const [liveResponse, setLiveResponse] = useState<ProfileResponse | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const preset = payloadPresets[selectedPreset] || payloadPresets.flat;
   const currentCode = activeTab === 'custom' && customCode ? customCode : preset.code;
+
+  const profileState = liveResponse
+    ? 'live'
+    : isProfiling
+    ? 'loading'
+    : apiError
+    ? 'error'
+    : 'idle';
+
+  const profileStateLabel =
+    profileState === 'live'
+      ? 'Live profile'
+      : profileState === 'loading'
+      ? 'Profiling…'
+      : profileState === 'error'
+      ? 'Sample data'
+      : 'Awaiting profile';
 
   const handlePresetChange = useCallback((key: string) => {
     setSelectedPreset(key);
@@ -216,6 +236,7 @@ export default function AnalyzePage() {
     if (flashTimer2.current) clearTimeout(flashTimer2.current);
 
     try {
+      setApiError(null);
       const parsed = JSON.parse(currentCode);
       const res = await profilePayload(parsed);
       setLiveResponse(res);
@@ -230,7 +251,7 @@ export default function AnalyzePage() {
       setMEntropy(`${res.profile.key_entropy_bits_per_key.toFixed(2)} bits/key`);
       setMArchetype(res.archetype_label);
       setMSignals(res.routing_signals);
-    } catch {
+    } catch (err) {
       const p = payloadPresets[selectedPreset] || payloadPresets.flat;
       setMTopLevel(p.type);
       setMRecords(p.records);
@@ -243,6 +264,9 @@ export default function AnalyzePage() {
       setMArchetype('');
       setMSignals([]);
       setLiveResponse(null);
+      setApiError(
+        err instanceof Error ? err.message : 'Unexpected API error.'
+      );
     }
 
     flashTimer.current = setTimeout(() => {
@@ -276,6 +300,10 @@ export default function AnalyzePage() {
 
   return (
     <div className="px-space-xl py-space-lg flex flex-col gap-space-lg">
+      <ApiErrorBanner
+        message={apiError}
+        onDismiss={() => setApiError(null)}
+      />
       {/* Top Action & Overview Strip */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-md pb-space-sm border-b border-outline-variant/20">
         <div className="flex flex-col gap-space-3xs">
@@ -435,8 +463,10 @@ export default function AnalyzePage() {
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-secondary"></span>
-                <span className="font-mono-data-sm text-mono-data-sm text-secondary">PROFILED (PASS)</span>
+                <DataSourceBadge
+                  state={profileState}
+                  label={profileStateLabel}
+                />
               </div>
             </div>
 
@@ -565,7 +595,7 @@ export default function AnalyzePage() {
                 </span>
               </div>
               <span className="font-mono-data-sm text-mono-data-sm text-secondary bg-secondary/10 px-space-2xs py-0.5 rounded border border-secondary/20 font-semibold">
-                {mSignals.length > 0 ? `${mSignals.length} Active Signals` : '4 Active Signals'}
+                {mSignals.length > 0 ? `${mSignals.length} Active Signals` : 'Sample signals'}
               </span>
             </div>
 

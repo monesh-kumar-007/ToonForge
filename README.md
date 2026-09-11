@@ -76,6 +76,39 @@ python benchmarks/adversarial_cases.py
 
 ---
 
+## Deployment
+
+The web dashboard and the FastAPI backend deploy independently. All API calls
+from the dashboard go through a single client (`apps/web/lib/api.ts`) that
+reads `NEXT_PUBLIC_API_URL`.
+
+### Frontend (Netlify)
+
+Set the build-time environment variable on the Netlify site (Site settings →
+Environment variables) and rebuild:
+
+- `NEXT_PUBLIC_API_URL` — public URL of the deployed backend API, e.g.
+  `https://toonforge-api-23n6.onrender.com`.
+
+Without it, the dashboard falls back to `http://localhost:8000` and API calls
+fail from the deployed site. `NEXT_PUBLIC_*` variables are inlined at build
+time, so redeploy after changing them. Reference config (non-secret, local
+development): `apps/web/.env.example`.
+
+### Backend (Render / FastAPI)
+
+Set on the backend service:
+
+- `FRONTEND_URL` — public URL of the deployed dashboard (e.g.
+  `https://<your-app>.netlify.app`). The API adds it to its explicit CORS
+  allow-list (`apps/api/config/settings.py`) alongside the localhost origins.
+  CORS is explicit-origin only — no wildcard is used.
+
+`NEXT_PUBLIC_API_URL` must match the backend's public origin exactly, without a
+trailing slash.
+
+---
+
 ## Development Notes
 
 - **Run everything from the repo root** (`toonforge/`). Module and data paths

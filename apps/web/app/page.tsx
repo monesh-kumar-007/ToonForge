@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import DataSourceBadge from '@/components/DataSourceBadge';
 
 interface Telemetry {
   id: string;
@@ -56,6 +57,10 @@ export default function OverviewPage() {
               <span className="font-label-caps text-label-caps uppercase text-secondary tracking-widest">RESEARCH LAB CONSOLE</span>
               <span className="text-outline-variant font-mono-data-sm text-mono-data-sm">::</span>
               <span className="font-mono-data-sm text-mono-data-sm text-outline">SYS_DIAGNOSTICS_RUNNING</span>
+              <DataSourceBadge
+                state="reference"
+                label="Static reference · demo visualization"
+              />
             </div>
             <h1 className="font-headline-xl text-headline-xl text-on-surface font-semibold tracking-tight">Adaptive Context Engine</h1>
             <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
@@ -276,7 +281,7 @@ export default function OverviewPage() {
           <div className="mt-space-md p-space-sm rounded-lg bg-surface-container-lowest flex flex-wrap items-center justify-between gap-space-xs" id="pipeline-telemetry">
             <div className="flex items-center gap-space-sm">
               <span className="font-label-caps text-label-caps text-secondary uppercase tracking-wider flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-secondary" /> LIVE SIMULATION RECEIPT
+                <span className="h-2 w-2 rounded-full bg-secondary" /> SIMULATION RECEIPT
               </span>
               <span className="font-mono-data-sm text-mono-data-sm text-outline">Payload {telemetry.id}</span>
               <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Depth: {telemetry.depth} | Homogeneity: {telemetry.hom}</span>
