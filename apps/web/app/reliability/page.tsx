@@ -24,6 +24,409 @@ const STATIC_CASES: AdversarialCase[] = [
   },
 ];
 
+function formatPretty(value: unknown): string {
+  if (value === undefined || value === null) return 'null';
+  if (typeof value === 'string') return value;
+  try {
+    const json = JSON.stringify(value, null, 2);
+    return json ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function describeType(value: unknown): string {
+  if (value === undefined || value === null) return '—';
+  if (Array.isArray(value)) return `Array (len: ${value.length})`;
+  if (typeof value === 'object') return `Object (${Object.keys(value).length} keys)`;
+  const t = typeof value;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function statusPill(status: string) {
+  const cls =
+    status === 'VALID'
+      ? 'bg-secondary/10 text-secondary'
+      : status === 'REJECTED'
+      ? 'bg-error-container text-on-error'
+      : 'bg-surface-container-high text-outline';
+  return (
+    <span
+      className={`px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm font-semibold whitespace-nowrap ${cls}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="w-full rounded-xl bg-surface-container-lowest shadow-2xl overflow-hidden flex flex-col items-center justify-center gap-space-sm p-space-2xl text-center">
+      <span className="material-symbols-outlined text-[40px] text-outline-variant">folder_off</span>
+      <div className="flex flex-col gap-space-2xs items-center">
+        <span className="font-headline-md text-headline-md text-on-surface">No adversarial cases returned.</span>
+        <span className="font-body-sm text-body-sm text-on-surface-variant">
+          The API returned an empty cases array for this run.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function LiveTrace({
+  selected,
+  fetchState,
+}: {
+  selected: AdversarialCase;
+  fetchState: 'loading' | 'live' | 'error';
+}) {
+  const routing = selected.routing_result;
+  const validation = selected.validation_passed;
+  const assertionFailed = validation === false;
+  const rejected = selected.candidate_rejected === true;
+  const promotedFormat = selected.alternative_format ?? routing?.selected_format ?? null;
+  const fallbackUsed = selected.final_fallback_used ?? routing?.final_fallback_used ?? false;
+  const candidates = routing?.candidates ?? [];
+
+  return (
+    <div className="w-full rounded-xl bg-surface-container-lowest shadow-2xl overflow-hidden flex flex-col">
+      {/* Terminal Header Bar */}
+      <div className="h-10 bg-surface-container-low px-space-md flex items-center justify-between select-none gap-space-xs">
+        <div className="flex items-center gap-space-sm min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-error-container"></span>
+            <span className="h-2.5 w-2.5 rounded-full bg-surface-container-highest"></span>
+            <span className="h-2.5 w-2.5 rounded-full bg-secondary-container"></span>
+          </div>
+          <span className="font-mono-data-sm text-mono-data-sm text-outline tracking-wider truncate">
+            TRACE_VIEWER // {selected.case_id}
+          </span>
+          <DataSourceBadge
+            state={fetchState === 'live' ? 'live' : fetchState === 'error' ? 'error' : 'loading'}
+            label={
+              fetchState === 'live'
+                ? 'Live case'
+                : fetchState === 'error'
+                ? 'Last live results'
+                : 'Refetching…'
+            }
+            className="hidden sm:inline-flex"
+          />
+        </div>
+        <div className="flex items-center gap-space-xs shrink-0">
+          <span className="px-space-2xs py-0.5 rounded bg-surface-container-high text-outline font-label-caps text-label-caps uppercase">
+            AST-DEPTH: {routing?.profile?.max_depth ?? '—'}
+          </span>
+          <span
+            className={`px-space-2xs py-0.5 rounded bg-surface-container-high font-label-caps text-label-caps uppercase ${
+              assertionFailed ? 'text-error' : 'text-secondary'
+            }`}
+          >
+            ASSERTION: {validation === undefined ? 'PENDING' : assertionFailed ? 'FAIL' : 'PASS'}
+          </span>
+        </div>
+      </div>
+
+      {/* Terminal Body / Step Grid */}
+      <div className="p-space-lg flex flex-col gap-space-md">
+        {/* Case Detail Header */}
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-space-sm">
+          <div className="flex flex-col gap-space-2xs min-w-0">
+            <div className="flex items-center gap-space-xs flex-wrap">
+              <h4 className="font-headline-md text-headline-md text-on-surface">{selected.name}</h4>
+              <span className="px-space-xs py-0.5 rounded bg-surface-container-high text-outline font-mono-data-sm text-mono-data-sm">
+                {selected.case_id}
+              </span>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant max-w-3xl">
+              {selected.description}
+            </p>
+          </div>
+          <span
+            className={`px-space-sm py-1 rounded font-mono-data-sm text-mono-data-sm font-semibold whitespace-nowrap self-start ${
+              assertionFailed
+                ? 'bg-error-container text-on-error-container'
+                : 'bg-secondary/10 text-secondary'
+            }`}
+          >
+            {validation === undefined ? 'UNKNOWN' : assertionFailed ? 'REJECTED' : 'VALID'}
+          </span>
+        </div>
+
+        {/* Step 1 & Step 2 Split Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+          {/* Step 1: Input Payload */}
+          <div className="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs relative group hover:bg-surface-container transition-colors shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-label-caps text-label-caps text-secondary font-semibold">
+                STEP 01 — INPUT PAYLOAD
+              </span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">RAW JSON (ORIGIN)</span>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">{selected.description}</p>
+            <div className="bg-surface-container-lowest p-space-sm rounded font-mono-data-lg text-mono-data-lg text-on-surface overflow-x-auto">
+              <pre className="text-primary-fixed">{formatPretty(selected.original_payload)}</pre>
+            </div>
+            <div className="flex items-center gap-space-xs pt-space-2xs font-mono-data-sm text-mono-data-sm text-outline">
+              <span>INFERRED TYPE:</span>
+              <span className="text-secondary font-medium">{routing?.profile?.top_level_type ?? '—'}</span>
+            </div>
+          </div>
+
+          {/* Step 2: TOON Encoding */}
+          <div className="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs relative group hover:bg-surface-container transition-colors shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-label-caps text-label-caps text-tertiary font-semibold">
+                STEP 02 — TOON ENCODING
+              </span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">OPTIMIZER CANDIDATE</span>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              Serialized TOON candidate under the adversarial case.
+            </p>
+            {selected.toon_encoded != null ? (
+              <div className="bg-surface-container-lowest p-space-sm rounded font-mono-data-lg text-mono-data-lg text-on-surface overflow-x-auto">
+                <pre className="text-on-surface-variant">{selected.toon_encoded}</pre>
+              </div>
+            ) : (
+              <div className="bg-surface-container-lowest p-space-sm rounded font-mono-data-sm text-mono-data-sm text-outline">
+                Not provided — TOON encoding was not produced.
+              </div>
+            )}
+            <div className="flex items-center gap-space-xs pt-space-2xs font-mono-data-sm text-mono-data-sm text-outline">
+              <span>TOON TOKENS:</span>
+              <span className="text-primary font-medium">{routing?.token_counts?.['TOON'] ?? '—'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Step 3 & Step 4: Coercion & Failure Detection */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+          {/* Step 3: Decoded Result */}
+          <div className="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs relative shadow-sm">
+            <div className="flex items-center justify-between">
+              <span
+                className={`font-label-caps text-label-caps font-semibold ${assertionFailed ? 'text-error' : 'text-secondary'}`}
+              >
+                STEP 03 — DECODED RESULT
+              </span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">DESERIALIZED AST</span>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              Round-trip parser reconstructs payload from token stream.
+            </p>
+            {selected.toon_decoded !== undefined && selected.toon_decoded !== null ? (
+              <div className="bg-surface-container-lowest p-space-sm rounded font-mono-data-lg text-mono-data-lg text-on-surface overflow-x-auto">
+                <pre className={assertionFailed ? 'text-error' : 'text-on-surface'}>
+                  {formatPretty(selected.toon_decoded)}
+                </pre>
+              </div>
+            ) : (
+              <div className="bg-surface-container-lowest p-space-sm rounded font-mono-data-sm text-mono-data-sm text-outline">
+                Not provided — decoded result was not recorded.
+              </div>
+            )}
+            <div className="flex items-center gap-space-xs pt-space-2xs font-mono-data-sm text-mono-data-sm text-outline">
+              <span>RECOVERED TYPE:</span>
+              <span className={`font-semibold ${assertionFailed ? 'text-error' : 'text-secondary'}`}>
+                {describeType(selected.toon_decoded)}
+              </span>
+            </div>
+          </div>
+
+          {/* Step 4: Deep AST Assertion Engine */}
+          <div className="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs relative shadow-sm">
+            <div className="flex items-center justify-between">
+              <span
+                className={`font-label-caps text-label-caps font-semibold ${assertionFailed ? 'text-error' : 'text-secondary'}`}
+              >
+                STEP 04 — DEEP AST ASSERTION ENGINE
+              </span>
+              <span
+                className={`px-space-2xs py-0.5 rounded font-mono-data-sm text-mono-data-sm font-semibold ${
+                  assertionFailed ? 'bg-error-container text-on-error' : 'bg-secondary/10 text-secondary'
+                }`}
+              >
+                {validation === undefined
+                  ? 'NOT EXECUTED'
+                  : assertionFailed
+                  ? 'ASSERTION FAIL'
+                  : 'ASSERTION PASS'}
+              </span>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              Bi-directional semantic tree comparison checks scalar primitive parity.
+            </p>
+            {selected.rejection_reason ? (
+              <div className="bg-surface-container-lowest p-space-sm rounded font-mono-data-sm text-mono-data-sm text-error overflow-x-auto flex flex-col gap-1">
+                <div className="flex items-center gap-space-xs font-semibold">
+                  <span className="material-symbols-outlined text-[16px]">cancel</span>
+                  <span>TYPE MISMATCH DETECTED</span>
+                </div>
+                <div className="text-on-surface-variant">{selected.rejection_reason}</div>
+              </div>
+            ) : (
+              <div className="bg-surface-container-lowest p-space-sm rounded font-mono-data-sm text-mono-data-sm text-secondary overflow-x-auto flex flex-col gap-1">
+                <div className="flex items-center gap-space-xs font-semibold">
+                  <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                  <span>NO TYPE MISMATCH</span>
+                </div>
+                <div className="text-on-surface-variant">Semantic identity preserved across round-trip.</div>
+              </div>
+            )}
+            <div className="flex items-center gap-space-xs pt-space-2xs font-mono-data-sm text-mono-data-sm text-outline">
+              <span>VALID CANDIDATES:</span>
+              <span className="text-secondary font-medium">
+                {routing?.valid_candidates && routing.valid_candidates.length > 0
+                  ? routing.valid_candidates.join(', ')
+                  : '—'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Step 5 & Step 6: Router Action & Alternative Promotion */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+          {/* Step 5: Router Action */}
+          <div className="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-label-caps text-label-caps text-error font-semibold">
+                STEP 05 — ROUTER ACTION
+              </span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">PRUNING PIPELINE</span>
+            </div>
+            <div
+              className={`flex items-center gap-space-sm bg-surface-container-lowest p-space-sm rounded ${
+                rejected ? '' : 'border border-secondary/30'
+              }`}
+            >
+              <span className={`material-symbols-outlined text-[24px] ${rejected ? 'text-error' : 'text-secondary'}`}>
+                {rejected ? 'block' : 'task_alt'}
+              </span>
+              <div className="flex flex-col min-w-0">
+                <span
+                  className={`font-mono-data-sm text-mono-data-sm font-semibold uppercase ${
+                    rejected ? 'text-error' : 'text-secondary'
+                  }`}
+                >
+                  {rejected ? 'REJECT CANDIDATE: TOON' : 'TOON CANDIDATE: VALID'}
+                </span>
+                <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+                  {rejected
+                    ? selected.rejection_reason ?? 'Candidate failed validation.'
+                    : 'Validator confirmed round-trip isomorphism.'}
+                </span>
+              </div>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              {rejected
+                ? 'TOON candidate pruned despite token efficiency — semantic preservation is prioritized.'
+                : 'TOON candidate retained as a sound candidate for selection.'}
+            </p>
+          </div>
+
+          {/* Step 6: Safe Alternative Promotion */}
+          <div className="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-label-caps text-label-caps text-secondary font-semibold">
+                STEP 06 — SAFE ALTERNATIVE PROMOTION
+              </span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">SELECTED FORMAT</span>
+            </div>
+            <div className="flex items-center gap-space-sm bg-surface-container-lowest p-space-sm rounded">
+              <span className="material-symbols-outlined text-secondary text-[24px]">task_alt</span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-mono-data-sm text-mono-data-sm text-secondary font-semibold uppercase truncate">
+                  {promotedFormat ? `${promotedFormat} PROMOTED` : 'ALTERNATIVE FORMAT'}
+                </span>
+                <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+                  {promotedFormat
+                    ? 'Selected as the routed format for this payload.'
+                    : 'No alternative format recorded.'}
+                </span>
+              </div>
+            </div>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">
+              {fallbackUsed
+                ? 'Fallback path engaged — final output routed through the safe fallback format.'
+                : 'Routed without fallback — candidate selection handled in pruning phase.'}
+            </p>
+          </div>
+        </div>
+
+        {/* Final Validation Status Readout Strip */}
+        <div className="bg-surface-container-high p-space-md rounded-lg flex flex-col md:flex-row items-center justify-between gap-space-md">
+          <div className="flex items-center gap-space-md flex-wrap">
+            <div className="flex items-center gap-space-xs px-space-sm py-1 rounded bg-surface-container-lowest">
+              <span
+                className={`h-2 w-2 rounded-full ${assertionFailed ? 'bg-error' : 'bg-secondary'} animate-pulse`}
+              ></span>
+              <span
+                className={`font-mono-data-sm text-mono-data-sm font-semibold uppercase ${
+                  assertionFailed ? 'text-error' : 'text-secondary'
+                }`}
+              >
+                Final Output: {assertionFailed ? '✗ REJECTED' : '✓ VALID'}
+              </span>
+            </div>
+            <div className="h-4 w-px bg-outline-variant/40 hidden md:block"></div>
+            <div className="flex items-center gap-space-xs font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+              <span>Final Fallback Used:</span>
+              <span className="text-on-surface font-semibold">{fallbackUsed ? 'YES' : 'NO'}</span>
+              {routing?.fallback_reason ? (
+                <span className="text-outline">({routing.fallback_reason})</span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center gap-space-xs font-mono-data-sm text-mono-data-sm text-outline">
+            <span className="material-symbols-outlined text-[16px] text-secondary">security</span>
+            <span>Downstream Safety Locked</span>
+          </div>
+        </div>
+
+        {/* Candidate Evaluation Table */}
+        {candidates.length > 0 && (
+          <div className="bg-surface-container-low p-space-md rounded-lg flex flex-col gap-space-xs shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="font-label-caps text-label-caps text-on-surface font-semibold">
+                CANDIDATE EVALUATION
+              </span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline uppercase">
+                {candidates.length} CANDIDATES
+              </span>
+            </div>
+            <div className="bg-surface-container-lowest rounded p-space-sm overflow-x-auto">
+              <div className="min-w-[560px] flex flex-col gap-0.5">
+                <div className="grid grid-cols-[minmax(0,110px)_minmax(0,90px)_minmax(0,46px)_minmax(0,1fr)_minmax(0,64px)] gap-space-sm px-space-sm py-1 font-mono-data-sm text-mono-data-sm text-outline uppercase">
+                  <span>Format</span>
+                  <span>Status</span>
+                  <span>Valid</span>
+                  <span>Rejection</span>
+                  <span>Tokens</span>
+                </div>
+                {candidates.map((rc) => (
+                  <div
+                    key={rc.format_id}
+                    className="grid grid-cols-[minmax(0,110px)_minmax(0,90px)_minmax(0,46px)_minmax(0,1fr)_minmax(0,64px)] gap-space-sm px-space-sm py-1 items-center font-mono-data-sm text-mono-data-sm border-t border-outline-variant/20"
+                  >
+                    <span className="text-on-surface font-medium">{rc.format_id}</span>
+                    <span>{statusPill(rc.status)}</span>
+                    <span className={rc.valid ? 'text-secondary' : 'text-outline'}>
+                      {rc.valid ? 'YES' : 'NO'}
+                    </span>
+                    <span className="text-outline truncate">{rc.rejection_reason ?? '—'}</span>
+                    <span className="text-primary">{rc.estimated_tokens ?? '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ReliabilityPage() {
   const [cases, setCases] = useState<AdversarialCase[]>(STATIC_CASES);
   const [totalCases, setTotalCases] = useState(1);
@@ -32,15 +435,24 @@ export default function ReliabilityPage() {
   const [loading, setLoading] = useState(false);
   const [fetchState, setFetchState] = useState<'loading' | 'live' | 'error'>('loading');
   const [apiError, setApiError] = useState<string | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [hasLiveData, setHasLiveData] = useState(false);
 
-  const applyResponse = useCallback((data: AdversarialResponse) => {
-    if (data.cases && data.cases.length > 0) {
-      setCases(data.cases);
-    }
-    setTotalCases(data.total_cases);
-    setRejectionCount(data.rejection_count);
-    setFallbackCount(data.fallback_count);
+  const advanceSelectedCaseId = useCallback((nextCases: AdversarialCase[]) => {
+    setSelectedCaseId(nextCases.length > 0 ? nextCases[0].case_id : null);
   }, []);
+
+  const applyResponse = useCallback(
+    (data: AdversarialResponse) => {
+      setCases(data.cases);
+      setTotalCases(data.total_cases);
+      setRejectionCount(data.rejection_count);
+      setFallbackCount(data.fallback_count);
+      setHasLiveData(true);
+      advanceSelectedCaseId(data.cases);
+    },
+    [advanceSelectedCaseId]
+  );
 
   const scrollToAdversarialSuite = useCallback(() => {
     document
@@ -72,6 +484,8 @@ export default function ReliabilityPage() {
   }, [handleRunAudit]);
 
   const firstCase = cases[0];
+  const selectedCase =
+    cases.find((c) => c.case_id === selectedCaseId) ?? firstCase ?? null;
 
   return (
     <div className="relative w-full px-space-xl py-space-xl overflow-hidden">
@@ -143,20 +557,26 @@ export default function ReliabilityPage() {
         id="adversarial-suite"
         className="w-full flex flex-col gap-space-md mb-space-2xl scroll-mt-20"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-space-sm">
           <div className="flex items-center gap-space-xs">
             <span className="h-2 w-2 rounded-full bg-secondary"></span>
             <h3 className="font-headline-lg text-headline-lg text-on-surface uppercase tracking-tight">
               Adversarial Validation Trace
             </h3>
           </div>
-          <div className="flex items-center gap-space-xs font-mono-data-sm text-mono-data-sm text-outline">
+          <div className="flex items-center gap-space-xs flex-wrap font-mono-data-sm text-mono-data-sm text-outline">
             <span>
               DEBUGGER ID:{' '}
               <span className="text-on-surface">TRACE-ADV-9041X</span>
             </span>
             <span className="text-outline-variant">/</span>
             {fetchState === 'live' && <span className="text-secondary">REALTIME_EXEC</span>}
+            <span className="text-outline-variant">/</span>
+            <span className={hasLiveData ? 'text-secondary' : 'text-outline'}>
+              {hasLiveData
+                ? `${cases.length} adversarial case${cases.length === 1 ? '' : 's'}`
+                : `${cases.length} reference case${cases.length === 1 ? '' : 's'}`}
+            </span>
             <DataSourceBadge
               state={
                 fetchState === 'live'
@@ -169,13 +589,81 @@ export default function ReliabilityPage() {
                 fetchState === 'live'
                   ? 'Live trace'
                   : fetchState === 'error'
-                  ? 'API unavailable — demo trace shown'
+                  ? hasLiveData
+                    ? 'API unavailable — showing last live results'
+                    : 'API unavailable — demo trace shown'
                   : 'Running suite…'
               }
             />
           </div>
         </div>
 
+        {/* Case Explorer: Selector + Detail */}
+        <div className="w-full grid grid-cols-1 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] gap-space-md items-start">
+          {/* Case Selector */}
+          <div className="w-full rounded-xl bg-surface-container-lowest shadow-2xl overflow-hidden flex flex-col">
+            <div className="h-10 bg-surface-container-low px-space-md flex items-center select-none">
+              <span className="font-mono-data-sm text-mono-data-sm text-outline tracking-wider">
+                CASE SELECTOR
+              </span>
+            </div>
+            <div className="p-space-sm flex flex-row lg:flex-col gap-space-xs overflow-x-auto lg:overflow-y-auto lg:max-h-[640px]">
+              {cases.map((c) => {
+                const isActive = (selectedCase?.case_id ?? null) === c.case_id;
+                const status =
+                  c.validation_passed === true
+                    ? 'PASS'
+                    : c.validation_passed === false
+                    ? 'FAIL'
+                    : null;
+                return (
+                  <button
+                    key={c.case_id}
+                    type="button"
+                    onClick={() => setSelectedCaseId(c.case_id)}
+                    aria-current={isActive ? 'true' : undefined}
+                    aria-label={`${c.case_id}: ${c.name}${status ? ` — ${status}` : ''}`}
+                    className={`flex items-center justify-between gap-space-xs px-space-sm py-space-sm rounded-md border text-left transition-colors shrink-0 min-w-[220px] lg:min-w-0 lg:w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                      isActive
+                        ? 'bg-primary/10 border-secondary/40'
+                        : 'bg-surface-container-low border-outline-variant/20 hover:bg-surface-container'
+                    }`}
+                  >
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="font-mono-data-sm text-mono-data-sm text-outline">{c.case_id}</span>
+                      <span
+                        className={`font-body-sm text-body-sm truncate ${
+                          isActive ? 'text-on-surface' : 'text-on-surface-variant'
+                        }`}
+                      >
+                        {c.name}
+                      </span>
+                    </div>
+                    <span
+                      className={`px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm font-semibold shrink-0 ${
+                        status === 'PASS'
+                          ? 'bg-secondary/10 text-secondary'
+                          : status === 'FAIL'
+                          ? 'bg-error-container text-on-error-container'
+                          : 'bg-surface-container-high text-outline'
+                      }`}
+                    >
+                      {status ?? '—'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Detail Column */}
+          <div className="min-w-0 flex flex-col">
+            {fetchState === 'live' && cases.length === 0 ? (
+              <EmptyState />
+            ) : hasLiveData && selectedCase ? (
+              <LiveTrace selected={selectedCase} fetchState={fetchState} />
+            ) : (
+              <>
         {/* Execution Trace Terminal */}
         <div className="w-full rounded-xl bg-surface-container-lowest shadow-2xl overflow-hidden flex flex-col">
           {/* Terminal Header Bar */}
@@ -379,6 +867,10 @@ export default function ReliabilityPage() {
                 <span>Downstream Safety Locked</span>
               </div>
             </div>
+          </div>
+        </div>
+              </>
+            )}
           </div>
         </div>
       </div>
