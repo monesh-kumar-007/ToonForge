@@ -884,7 +884,7 @@ export default function ReliabilityPage() {
               Edge Case &amp; Semantic Integrity Guarantees
             </h3>
           </div>
-          <span className="font-mono-data-sm text-mono-data-sm text-outline uppercase">FORMAL SPECIFICATION v2.4</span>
+          <span className="font-mono-data-sm text-mono-data-sm text-outline uppercase">FORMAL SPECIFICATION</span>
         </div>
 
         {/* Two Side-by-Side Comparison Blocks */}

@@ -76,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="hidden lg:inline-flex items-center gap-1 px-space-xs py-0.5 rounded border border-outline-variant/40 bg-surface-container hover:bg-surface-container-high hover:text-on-surface text-on-surface-variant font-mono-data-sm text-mono-data-sm transition-colors"
           >
             <span className="material-symbols-outlined text-[14px]">article</span>
-            <span>Paper: arXiv:2408.0124</span>
+            <span>Research Paper</span>
           </Link>
         </div>
         <div className="h-4 w-px bg-outline-variant/40" />

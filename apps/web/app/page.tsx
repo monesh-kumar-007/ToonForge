@@ -23,6 +23,16 @@ export default function OverviewPage() {
   const [telemetry, setTelemetry] = useState<Telemetry>(MOCK_PAYLOADS[0]);
 
   const runAnimation = () => {
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      setTelemetry((prev: Telemetry) => {
+        return MOCK_PAYLOADS[(MOCK_PAYLOADS.indexOf(prev) + 1) % MOCK_PAYLOADS.length];
+      });
+      return;
+    }
+
     const nodes = document.querySelectorAll<HTMLElement>('.pipeline-node');
     nodes.forEach((node) => {
       node.classList.remove('ring-2', 'ring-secondary', 'bg-surface-container-highest');
@@ -56,7 +66,7 @@ export default function OverviewPage() {
             <div className="flex items-center gap-space-xs">
               <span className="font-label-caps text-label-caps uppercase text-secondary tracking-widest">RESEARCH LAB CONSOLE</span>
               <span className="text-outline-variant font-mono-data-sm text-mono-data-sm">::</span>
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">SYS_DIAGNOSTICS_RUNNING</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-outline">SYS_DIAGNOSTICS (SIMULATION)</span>
               <DataSourceBadge
                 state="reference"
                 label="Static reference · demo visualization"
@@ -73,9 +83,9 @@ export default function OverviewPage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-secondary" />
               </span>
-              <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold tracking-wider uppercase">VALIDATION ACTIVE</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold tracking-wider uppercase">SIMULATION ACTIVE</span>
               <span className="text-outline-variant">|</span>
-              <span className="font-mono-data-sm text-mono-data-sm text-secondary">AESTHETIC_V2.4</span>
+              <span className="font-mono-data-sm text-mono-data-sm text-secondary">AESTHETIC</span>
             </div>
           </div>
         </div>
@@ -278,7 +288,7 @@ export default function OverviewPage() {
           </div>
 
           {/* Interactive Micro-Console for Simulation */}
-          <div className="mt-space-md p-space-sm rounded-lg bg-surface-container-lowest flex flex-wrap items-center justify-between gap-space-xs" id="pipeline-telemetry">
+          <div className="mt-space-md p-space-sm rounded-lg bg-surface-container-lowest flex flex-wrap items-center justify-between gap-space-xs" id="pipeline-telemetry" aria-live="polite">
             <div className="flex items-center gap-space-sm">
               <span className="font-label-caps text-label-caps text-secondary uppercase tracking-wider flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-secondary" /> SIMULATION RECEIPT
@@ -291,6 +301,9 @@ export default function OverviewPage() {
               <span className="text-on-surface-variant">Winner: <span className="text-secondary font-bold">{telemetry.winner}</span></span>
               <span className="text-outline">Roundtrip Latency: <span className="text-on-surface">{telemetry.latency}</span></span>
             </div>
+            <span className="w-full font-body-sm text-body-sm text-outline">
+              Sample telemetry · illustrative values from a fixed demo set, not live API measurements.
+            </span>
           </div>
         </div>
       </section>
@@ -310,18 +323,18 @@ export default function OverviewPage() {
               </span>
             </div>
             <p className="font-body-sm text-body-sm text-on-surface-variant mb-space-lg">
-              Empirical winner distribution across the synthetic benchmark suite, balancing AST depth, repeating keys, and nesting overhead.
+              Illustrative winner distribution across the synthetic benchmark suite (simulated), balancing AST depth, repeating keys, and nesting overhead.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-space-md items-center flex-1">
               {/* Vector Donut Chart */}
               <div className="sm:col-span-5 flex flex-col items-center justify-center relative p-space-xs">
-                <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
+                <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
                   <circle className="text-surface-container" cx="50" cy="50" fill="none" r="38" stroke="currentColor" strokeWidth="12" />
-                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#4cd7f6" strokeDasharray="100.28 238.76" strokeDashoffset="0" strokeWidth="12" />
-                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#adc6ff" strokeDasharray="66.85 238.76" strokeDashoffset="-100.28" strokeWidth="12" />
-                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#d0bcff" strokeDasharray="42.98 238.76" strokeDashoffset="-167.13" strokeWidth="12" />
-                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#4d8eff" strokeDasharray="19.10 238.76" strokeDashoffset="-210.11" strokeWidth="12" />
-                  <circle className="transition-all duration-500 hover:opacity-80 cursor-pointer" cx="50" cy="50" fill="none" r="38" stroke="#8c909f" strokeDasharray="9.55 238.76" strokeDashoffset="-229.21" strokeWidth="12" />
+                  <circle className="transition-all duration-500" cx="50" cy="50" fill="none" r="38" stroke="#4cd7f6" strokeDasharray="100.28 238.76" strokeDashoffset="0" strokeWidth="12" />
+                  <circle className="transition-all duration-500" cx="50" cy="50" fill="none" r="38" stroke="#adc6ff" strokeDasharray="66.85 238.76" strokeDashoffset="-100.28" strokeWidth="12" />
+                  <circle className="transition-all duration-500" cx="50" cy="50" fill="none" r="38" stroke="#d0bcff" strokeDasharray="42.98 238.76" strokeDashoffset="-167.13" strokeWidth="12" />
+                  <circle className="transition-all duration-500" cx="50" cy="50" fill="none" r="38" stroke="#4d8eff" strokeDasharray="19.10 238.76" strokeDashoffset="-210.11" strokeWidth="12" />
+                  <circle className="transition-all duration-500" cx="50" cy="50" fill="none" r="38" stroke="#8c909f" strokeDasharray="9.55 238.76" strokeDashoffset="-229.21" strokeWidth="12" />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                   <span className="font-headline-lg text-headline-lg text-on-surface font-bold">200</span>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { profilePayload, ProfileResponse } from '@/lib/api';
+import { profilePayload, ProfileResponse, StructuralProfile } from '@/lib/api';
 import ApiErrorBanner from '@/components/ApiErrorBanner';
 import DataSourceBadge from '@/components/DataSourceBadge';
 
@@ -57,8 +57,7 @@ const payloadPresets: Record<string, Preset> = {
       "env": "cluster-us-east-4",
       "tags": ["ast"]
     }
-  },
-  // ... 22 additional uniform telemetry records
+  }
 ]`,
   },
   nested: {
@@ -184,6 +183,7 @@ export default function AnalyzePage() {
   const [mArchetype, setMArchetype] = useState('');
   const [mSignals, setMSignals] = useState<{ signal: string; description: string; value?: string }[]>([]);
   const [liveResponse, setLiveResponse] = useState<ProfileResponse | null>(null);
+  const [profileDetails, setProfileDetails] = useState<StructuralProfile | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
 
   const preset = payloadPresets[selectedPreset] || payloadPresets.flat;
@@ -197,14 +197,19 @@ export default function AnalyzePage() {
     ? 'error'
     : 'idle';
 
-  const profileStateLabel =
-    profileState === 'live'
-      ? 'Live profile'
-      : profileState === 'loading'
-      ? 'Profiling…'
+  const profileStateLabel = (() => {
+    if (profileState === 'live') return 'Live profile';
+    if (profileState === 'loading') return 'Profiling…';
+    if (profileState === 'error') return 'API unavailable — showing sample values';
+    return 'Awaiting profile · sample preset shown';
+  })();
+
+  const profileAnnotation =
+    profileState === 'idle'
+      ? 'Sample preset preview — not measured. Run the profiler for live values.'
       : profileState === 'error'
-      ? 'Sample data'
-      : 'Awaiting profile';
+      ? 'API unavailable — values below are from the sample preset, not measured.'
+      : null;
 
   const handlePresetChange = useCallback((key: string) => {
     setSelectedPreset(key);
@@ -218,28 +223,38 @@ export default function AnalyzePage() {
     setMSize(p.size);
     setMTokens(p.tokens);
     setLiveResponse(null);
+    setProfileDetails(null);
+    setMSignals([]);
+    setMArchetype('');
+    setApiError(null);
   }, []);
 
   const handleReset = useCallback(() => {
     setSelectedPreset('flat');
     setCustomCode('');
     setActiveTab('sample');
+    setLiveResponse(null);
+    setProfileDetails(null);
+    setMSignals([]);
+    setMArchetype('');
+    setApiError(null);
     handlePresetChange('flat');
   }, [handlePresetChange]);
 
   const runAnalysis = useCallback(async () => {
     if (isProfiling) return;
+    setApiError(null);
+    setLiveResponse(null);
+    setProfileDetails(null);
     setIsProfiling(true);
-    setFlashLabel('PROFILING...');
 
     if (flashTimer.current) clearTimeout(flashTimer.current);
     if (flashTimer2.current) clearTimeout(flashTimer2.current);
 
     try {
-      setApiError(null);
       const parsed = JSON.parse(currentCode);
+      setFlashLabel('PROFILING...');
       const res = await profilePayload(parsed);
-      setLiveResponse(res);
 
       setMTopLevel(res.profile.top_level_type);
       setMRecords(String(res.profile.record_count));
@@ -251,7 +266,13 @@ export default function AnalyzePage() {
       setMEntropy(`${res.profile.key_entropy_bits_per_key.toFixed(2)} bits/key`);
       setMArchetype(res.archetype_label);
       setMSignals(res.routing_signals);
+      setProfileDetails(res.profile);
+      setLiveResponse(res);
+
+      flashTimer.current = setTimeout(() => setFlashLabel('SIGNALS UPDATED'), 0);
+      flashTimer2.current = setTimeout(() => setFlashLabel(null), 900);
     } catch (err) {
+      setFlashLabel(null);
       const p = payloadPresets[selectedPreset] || payloadPresets.flat;
       setMTopLevel(p.type);
       setMRecords(p.records);
@@ -259,28 +280,22 @@ export default function AnalyzePage() {
       setMUniformity(p.uniformity);
       setMKeyRep(p.keyRep);
       setMUniqueKeys(p.uniqueKeys);
+      setMSize(p.size);
+      setMTokens(p.tokens);
       setMSavings('41.2% v JSON');
       setMEntropy('1.41 bits/key');
       setMArchetype('');
       setMSignals([]);
-      setLiveResponse(null);
       setApiError(
         err instanceof Error ? err.message : 'Unexpected API error.'
       );
+    } finally {
+      setIsProfiling(false);
     }
-
-    flashTimer.current = setTimeout(() => {
-      setFlashLabel('SIGNALS UPDATED');
-      flashTimer2.current = setTimeout(() => {
-        setFlashLabel(null);
-        setIsProfiling(false);
-      }, 1200);
-    }, 500);
   }, [currentCode, isProfiling, selectedPreset]);
 
   const handleExportAst = useCallback(() => {
     const data = liveResponse ?? {
-      schema_version: '2.4.0',
       node_type: mTopLevel,
       records: parseInt(mRecords),
       max_depth: parseInt(mDepth),
@@ -296,7 +311,10 @@ export default function AnalyzePage() {
     URL.revokeObjectURL(url);
   }, [liveResponse, mTopLevel, mRecords, mDepth, mUniformity, mSignals]);
 
-  const lineNumbers = Array.from({ length: 28 }, (_, i) => i + 1);
+  const lineNumbers = Array.from(
+    { length: Math.max(currentCode.split('\n').length, 28) },
+    (_, i) => i + 1
+  );
 
   return (
     <div className="px-space-xl py-space-lg flex flex-col gap-space-lg">
@@ -322,16 +340,18 @@ export default function AnalyzePage() {
           <button
             className="flex items-center gap-space-2xs px-space-md py-space-xs bg-surface-container hover:bg-surface-container-high text-on-surface rounded border border-outline-variant/40 transition-colors font-label-caps text-label-caps uppercase tracking-wider"
             onClick={handleExportAst}
+            title="Export the current profile as a JSON artifact"
           >
             <span className="material-symbols-outlined text-[16px] text-primary">account_tree</span>
             Export AST (.json)
           </button>
           <button
-            className="flex items-center gap-space-2xs px-space-md py-space-xs bg-primary text-on-primary hover:bg-primary-fixed-dim rounded shadow-md transition-all font-label-caps text-label-caps uppercase font-semibold tracking-wider"
+            className="flex items-center gap-space-2xs px-space-md py-space-xs bg-primary text-on-primary hover:bg-primary-fixed-dim rounded shadow-md transition-all font-label-caps text-label-caps uppercase font-semibold tracking-wider disabled:opacity-60 disabled:cursor-not-allowed"
             onClick={runAnalysis}
+            disabled={isProfiling}
           >
-            <span className="material-symbols-outlined text-[16px]">sync_alt</span>
-            Run Structure Profiler
+            <span className="material-symbols-outlined text-[16px]">{isProfiling ? 'refresh' : 'sync_alt'}</span>
+            {isProfiling ? 'Profiling…' : 'Run Structure Profiler'}
           </button>
         </div>
       </div>
@@ -371,7 +391,7 @@ export default function AnalyzePage() {
                 <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">Archetype:</span>
                 <div className="relative">
                   <select
-                    className="bg-surface-container-lowest text-on-surface font-mono-data-sm text-mono-data-sm pl-space-xs pr-7 py-1 rounded border border-outline-variant/40 focus:border-primary focus:outline-none appearance-none cursor-pointer"
+                    className="bg-surface-container-lowest text-on-surface font-mono-data-sm text-mono-data-sm pl-space-xs pr-7 py-1 rounded border border-outline-variant/40 focus:border-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 appearance-none cursor-pointer"
                     value={selectedPreset}
                     onChange={(e) => handlePresetChange(e.target.value)}
                   >
@@ -409,7 +429,7 @@ export default function AnalyzePage() {
                 {currentCode}
               </pre>
               <textarea
-                className={`${activeTab === 'custom' ? '' : 'hidden'} w-full h-full bg-transparent text-on-surface font-mono-data-sm text-mono-data-sm p-0 resize-none outline-none focus:ring-0 leading-relaxed`}
+                className={`${activeTab === 'custom' ? '' : 'hidden'} w-full h-full bg-transparent text-on-surface font-mono-data-sm text-mono-data-sm p-0 resize-none outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-primary/60 leading-relaxed`}
                 placeholder="Paste raw JSON or scalar payload here..."
                 spellCheck={false}
                 value={customCode}
@@ -433,12 +453,18 @@ export default function AnalyzePage() {
               </span>
             </div>
             <button
-              className={`flex items-center gap-2 px-space-lg py-2 rounded bg-primary-container text-on-primary-container hover:bg-primary font-mono-data-sm text-mono-data-sm font-semibold tracking-wide border border-primary/50 shadow-md transition-all active:scale-[0.98]${flashLabel ? ' opacity-75' : ''}`}
+              className={`flex items-center gap-2 px-space-lg py-2 rounded bg-primary-container text-on-primary-container hover:bg-primary font-mono-data-sm text-mono-data-sm font-semibold tracking-wide border border-primary/50 shadow-md transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed${isProfiling ? ' opacity-75' : ''}`}
               onClick={runAnalysis}
+              disabled={isProfiling}
             >
-              {flashLabel ? (
+              {isProfiling ? (
                 <>
                   <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
+                  PROFILING...
+                </>
+              ) : flashLabel ? (
+                <>
+                  <span className="material-symbols-outlined text-[16px]">analytics</span>
                   {flashLabel}
                 </>
               ) : (
@@ -535,7 +561,88 @@ export default function AnalyzePage() {
               <span>·</span>
               <span className="text-outline">Estimated Savings: <strong className="text-secondary">{mSavings}</strong></span>
             </div>
+            {mArchetype && (
+              <div className="px-space-md py-space-2xs border-t border-outline-variant/20 bg-surface-container-lowest flex items-center gap-1.5 text-on-surface-variant font-mono-data-sm text-mono-data-sm">
+                <span className="material-symbols-outlined text-[14px] text-secondary">sell</span>
+                <span className="text-outline">Archetype:</span>
+                <strong className="text-secondary">{mArchetype}</strong>
+              </div>
+            )}
+            {profileAnnotation && (
+              <div
+                className="px-space-md py-space-2xs border-t border-outline-variant/20 bg-surface-container-lowest flex items-center gap-1.5 text-outline font-body-sm text-body-sm"
+                role="note"
+              >
+                <span className="material-symbols-outlined text-[14px] text-primary shrink-0">info</span>
+                {profileAnnotation}
+              </div>
+            )}
           </div>
+
+          {/* Structural Details (live profile fields) */}
+          {profileDetails && (
+            <div className="bg-surface-container-low rounded-lg border border-outline-variant/30 overflow-hidden shadow-xl">
+              <div className="h-9 bg-surface-container-lowest px-space-md border-b border-outline-variant/30 flex items-center justify-between">
+                <div className="flex items-center gap-space-xs">
+                  <span className="material-symbols-outlined text-[16px] text-secondary">dns</span>
+                  <span className="font-label-caps text-label-caps text-on-surface uppercase tracking-wider font-semibold">
+                    STRUCTURAL DETAILS
+                  </span>
+                </div>
+                <span className="font-mono-data-sm text-mono-data-sm text-outline">{mArchetype || 'PROFILE'}</span>
+              </div>
+              <div className="p-space-md grid grid-cols-2 gap-space-xs font-mono-data-sm text-mono-data-sm">
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Nodes</span>
+                  <strong className="text-on-surface">{profileDetails.node_count}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Objects</span>
+                  <strong className="text-on-surface">{profileDetails.object_count}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Arrays</span>
+                  <strong className="text-on-surface">{profileDetails.array_count}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Arrays %</span>
+                  <strong className="text-on-surface">{(profileDetails.array_ratio * 100).toFixed(0)}%</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Scalars</span>
+                  <strong className="text-on-surface">{profileDetails.scalar_count}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Nulls</span>
+                  <strong className="text-on-surface">{profileDetails.null_count}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Avg Depth</span>
+                  <strong className="text-on-surface">{profileDetails.avg_depth.toFixed(2)}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">String Ratio</span>
+                  <strong className="text-on-surface">{(profileDetails.string_ratio * 100).toFixed(0)}%</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Key Consistency</span>
+                  <strong className="text-on-surface">{profileDetails.key_set_consistency.toFixed(2)}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Tabular Score</span>
+                  <strong className="text-on-surface">{profileDetails.tabular_score.toFixed(2)}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Tabular</span>
+                  <strong className="text-on-surface">{profileDetails.is_tabular ? 'Yes' : 'No'}</strong>
+                </div>
+                <div className="flex items-center justify-between p-space-2xs rounded bg-surface-container-lowest border border-outline-variant/20">
+                  <span className="text-outline">Deeply Nested</span>
+                  <strong className="text-on-surface">{profileDetails.is_deeply_nested ? 'Yes' : 'No'}</strong>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Visual Structure Tree Panel */}
           <div className="bg-surface-container-low rounded-lg border border-outline-variant/30 overflow-hidden shadow-xl flex flex-col">
@@ -582,6 +689,9 @@ export default function AnalyzePage() {
                   </span>
                 </div>
               </div>
+            </div>
+            <div className="px-space-md py-space-2xs border-t border-outline-variant/20 bg-surface-container-lowest text-outline font-body-sm text-body-sm">
+              Sample archetype schematic · illustrative, not derived from the live profile.
             </div>
           </div>
 

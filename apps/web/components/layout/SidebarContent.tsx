@@ -95,7 +95,7 @@ export const SidebarContent: React.FC<SidebarContentProps> = ({
               </span>
             </div>
             <span className="font-mono-data-sm text-mono-data-sm text-outline px-space-2xs py-0.5 rounded bg-surface-container-high border border-outline-variant/30">
-              v2.4-eval
+              STABLE
             </span>
           </div>
           <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">

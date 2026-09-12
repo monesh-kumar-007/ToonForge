@@ -1,5 +1,4 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export class ApiError extends Error {
   readonly status: number | null;
@@ -26,7 +25,12 @@ async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  if (!API_BASE_URL && process.env.NODE_ENV === 'production') {
+    throw new ApiError('NEXT_PUBLIC_API_URL is not configured.');
+  }
+
+  const base = API_BASE_URL || 'http://localhost:8000';
+  const url = `${base}${path}`;
 
   let response: Response;
 
@@ -40,7 +44,7 @@ async function apiFetch<T>(
     });
   } catch {
     throw new ApiError(
-      `Unable to reach the TOONFORGE API at ${API_BASE_URL}. ` +
+      `Unable to reach the TOONFORGE API at ${base}. ` +
         'Check that the backend is running and that NEXT_PUBLIC_API_URL is set correctly for production.',
       { url }
     );
@@ -55,6 +59,24 @@ async function apiFetch<T>(
       const maybeDetail = (body as { detail: unknown }).detail;
       if (typeof maybeDetail === 'string') {
         detail = maybeDetail;
+      } else if (Array.isArray(maybeDetail)) {
+        const parts = maybeDetail
+          .map((item) => {
+            if (
+              typeof item === 'object' &&
+              item !== null &&
+              'msg' in item
+            ) {
+              return String((item as { msg: unknown }).msg);
+            }
+            return JSON.stringify(item);
+          })
+          .filter((part) => typeof part === 'string' && part.length > 0);
+        if (parts.length > 0) {
+          detail = parts.join('; ');
+        }
+      } else if (maybeDetail !== null && maybeDetail !== undefined) {
+        detail = JSON.stringify(maybeDetail);
       }
     }
 

@@ -1,19 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { serializeAll, CandidateResult } from '@/lib/api';
 import ApiErrorBanner from '@/components/ApiErrorBanner';
 import DataSourceBadge from '@/components/DataSourceBadge';
-
-type FormatKey = 'JSON' | 'COMPACT JSON' | 'TOON' | 'JTON' | 'ONTO';
-
-const ALIASES: Record<FormatKey, string[]> = {
-  JSON: ['JSON'],
-  'COMPACT JSON': ['COMPACT JSON', 'Compact JSON', 'COMPACT'],
-  TOON: ['TOON'],
-  JTON: ['JTON'],
-  ONTO: ['ONTO'],
-};
 
 const SAMPLE_PAYLOAD = {
   record_id: 'rec_01J98X4L',
@@ -24,14 +14,18 @@ const SAMPLE_PAYLOAD = {
   },
 };
 
-const MOCK_CANDIDATES: CandidateResult[] = [
+/*
+ * REF_CANDIDATES is used ONLY as the pre-run / reference display.
+ * Once a live response exists, every card, chart bar, and audit row is
+ * rendered exclusively from the candidates returned by serializeAll().
+ */
+const REF_CANDIDATES: CandidateResult[] = [
   {
     format_id: 'JSON',
     status: 'VALID',
     eligible: true,
     valid: true,
-    encoded:
-      '{"record_id":"rec_01J98X4L","user_id":"usr_88201a","metric":{"duration_ms":14.82,"cache_hit":true}}',
+    encoded: null,
     estimated_tokens: 52,
     rejection_reason: null,
     pipeline_latency_ms: 1.2,
@@ -41,8 +35,7 @@ const MOCK_CANDIDATES: CandidateResult[] = [
     status: 'VALID',
     eligible: true,
     valid: true,
-    encoded:
-      '{"record_id":"rec_01J98X4L","user_id":"usr_88201a","metric":{"duration_ms":14.82,"cache_hit":true}}',
+    encoded: null,
     estimated_tokens: 39,
     rejection_reason: null,
     pipeline_latency_ms: 1.8,
@@ -62,7 +55,7 @@ const MOCK_CANDIDATES: CandidateResult[] = [
     status: 'VALID',
     eligible: true,
     valid: true,
-    encoded: 'JTON[... 34 tokens]',
+    encoded: null,
     estimated_tokens: 34,
     rejection_reason: null,
     pipeline_latency_ms: 2.1,
@@ -72,29 +65,36 @@ const MOCK_CANDIDATES: CandidateResult[] = [
     status: 'VALID',
     eligible: true,
     valid: true,
-    encoded: 'ONTO[... 41 tokens]',
+    encoded: null,
     estimated_tokens: 41,
     rejection_reason: null,
     pipeline_latency_ms: 1.9,
   },
 ];
 
-function mergeCandidates(live: CandidateResult[]): CandidateResult[] {
-  const merged = MOCK_CANDIDATES.map((m) => ({ ...m }));
+const DISPLAY_NAMES: Record<string, string> = {
+  JSON: 'JSON',
+  'Compact JSON': 'Compact JSON',
+  'COMPACT JSON': 'Compact JSON',
+  COMPACT: 'Compact JSON',
+  TOON: 'TOON',
+  JTON: 'JTON',
+  ONTO: 'ONTO',
+};
 
-  for (const c of live) {
-    const idx = merged.findIndex(
-      (m) =>
-        ALIASES[m.format_id as FormatKey]?.includes(c.format_id)
-    );
+const META: Record<string, { desc: string; icon: string; note: string }> = {
+  JSON: { desc: 'Canonical baseline spec', icon: 'memory', note: 'Uncompressed AST' },
+  'Compact JSON': { desc: 'Deterministic whitespace stripping', icon: 'compress', note: 'Zero syntax mutation' },
+  TOON: { desc: 'Tabular-oriented notation', icon: 'table_rows', note: 'Type inference active' },
+  JTON: { desc: 'Tuple syntax optimized', icon: 'schema', note: 'Columnar projection' },
+  ONTO: { desc: 'Object graph notation', icon: 'hub', note: 'Graph vector layout' },
+};
 
-    if (idx >= 0) {
-      merged[idx] = { ...c };
-    }
-  }
-
-  return merged;
+function displayName(formatId: string): string {
+  return DISPLAY_NAMES[formatId] ?? formatId;
 }
+
+const metaFor = (formatId: string) => META[displayName(formatId)] ?? null;
 
 /*
  * IMPORTANT:
@@ -115,142 +115,88 @@ function formatLatency(
   return `${latency.toFixed(1)}ms`;
 }
 
-function formatTokenCount(
-  tokens: number | null | undefined,
-  fallback: number
-): number {
-  return typeof tokens === 'number' && Number.isFinite(tokens)
-    ? tokens
-    : fallback;
-}
-
 export default function FormatComparisonPage() {
-  const [candidates, setCandidates] =
-    useState<CandidateResult[]>(MOCK_CANDIDATES);
-
   const [auditOpen, setAuditOpen] = useState<boolean>(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [liveCandidates, setLiveCandidates] = useState<CandidateResult[] | null>(null);
-  const [fetchState, setFetchState] = useState<'loading' | 'live' | 'error'>('loading');
+  const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'live' | 'error'>('idle');
 
-  useEffect(() => {
-    let cancelled = false;
-
+  const runComparison = async () => {
+    if (fetchState === 'loading') return;
     setApiError(null);
-
-    serializeAll(SAMPLE_PAYLOAD)
-      .then((res) => {
-        if (cancelled) return;
-
-        if (res.candidates?.length) {
-          setLiveCandidates(res.candidates);
-          setFetchState('live');
-          setCandidates(
-            mergeCandidates(res.candidates)
-          );
-        } else {
-          setFetchState('error');
-          setApiError(
-            'The API returned no candidate data. Showing demo/reference values.'
-          );
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-
+    setFetchState('loading');
+    try {
+      const res = await serializeAll(SAMPLE_PAYLOAD);
+      if (res.candidates?.length) {
+        setLiveCandidates(res.candidates);
+        setFetchState('live');
+      } else {
         setFetchState('error');
         setApiError(
-          err instanceof Error ? err.message : 'Unexpected API error.'
+          'The API returned no candidate data. Reference values remain shown.'
         );
-      });
+      }
+    } catch (err) {
+      setFetchState('error');
+      setApiError(
+        err instanceof Error ? err.message : 'Unexpected API error.'
+      );
+    }
+  };
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const isReference = liveCandidates === null;
 
-  const isLiveFormat = (ids: string[]): boolean =>
-    liveCandidates?.some((c) => ids.includes(c.format_id)) ?? false;
+  const displayCandidates = isReference ? REF_CANDIDATES : liveCandidates;
 
   const badgeState =
     fetchState === 'live'
       ? 'live'
+      : fetchState === 'loading'
+      ? 'loading'
       : fetchState === 'error'
       ? 'error'
-      : 'loading';
+      : 'idle';
 
   const badgeLabel =
     fetchState === 'live'
       ? 'Live API results'
+      : fetchState === 'loading'
+      ? 'Fetching live data…'
       : fetchState === 'error'
-      ? 'API unavailable — demo/reference data'
-      : 'Fetching live data…';
+      ? isReference
+        ? 'API unavailable — showing reference values'
+        : 'API unavailable — showing last results'
+      : 'Reference example (pre-run)';
 
-  const BackfillRefTag = ({ ids }: { ids: string[] }) =>
-    fetchState === 'live' && !isLiveFormat(ids) ? (
-      <span className="inline-flex items-center gap-1 font-mono-data-sm text-[10px] text-outline bg-surface-container-high/60 border border-outline-variant/30 px-1 py-0.5 rounded">
-        reference
-      </span>
-    ) : null;
+  const jsonBase = displayCandidates.find(
+    (c) => displayName(c.format_id) === 'JSON'
+  )?.estimated_tokens ?? null;
 
-  const candFor = (
-    key: FormatKey
-  ): CandidateResult => {
-    const ids = ALIASES[key];
-
-    return (
-      candidates.find((c) =>
-        ids.includes(c.format_id)
-      ) ??
-      MOCK_CANDIDATES.find(
-        (m) => m.format_id === key
-      )!
-    );
+  const deltaPct = (tokens: number | null): number | null => {
+    if (tokens === null || jsonBase === null) return null;
+    return Math.round(((jsonBase - tokens) / jsonBase) * 100);
   };
 
-  const jsonCand = candFor('JSON');
-  const compactCand = candFor('COMPACT JSON');
-  const toonCand = candFor('TOON');
-  const jtonCand = candFor('JTON');
-  const ontoCand = candFor('ONTO');
-
-  const jsonTokens = formatTokenCount(
-    jsonCand.estimated_tokens,
-    52
-  );
-
-  const compactTokens = formatTokenCount(
-    compactCand.estimated_tokens,
-    39
-  );
-
-  const toonTokens = formatTokenCount(
-    toonCand.estimated_tokens,
-    28
-  );
-
-  const jtonTokens = formatTokenCount(
-    jtonCand.estimated_tokens,
-    34
-  );
-
-  const ontoTokens = formatTokenCount(
-    ontoCand.estimated_tokens,
-    41
-  );
-
-  const deltaPct = (tokens: number) =>
-    Math.round(
-      ((jsonTokens - tokens) / jsonTokens) * 100
-    );
-
-  const compactDelta = deltaPct(compactTokens);
-  const jtonDelta = deltaPct(jtonTokens);
-  const ontoDelta = deltaPct(ontoTokens);
-
-  const validCount = candidates.filter(
+  const validCount = displayCandidates.filter(
     (c) => c.valid
   ).length;
+
+  const compressionRatio = (() => {
+    const json = displayCandidates.find(
+      (c) => displayName(c.format_id) === 'JSON'
+    );
+    const compact = displayCandidates.find(
+      (c) => displayName(c.format_id) === 'Compact JSON'
+    );
+    if (
+      json?.estimated_tokens &&
+      compact?.estimated_tokens &&
+      compact.estimated_tokens > 0
+    ) {
+      return (json.estimated_tokens / compact.estimated_tokens).toFixed(2);
+    }
+    return '—';
+  })();
 
   const bar = (tokens: number) => {
     const h = Math.max(
@@ -267,12 +213,6 @@ export default function FormatComparisonPage() {
     };
   };
 
-  const jsonBar = bar(jsonTokens);
-  const compactBar = bar(compactTokens);
-  const toonBar = bar(toonTokens);
-  const jtonBar = bar(jtonTokens);
-  const ontoBar = bar(ontoTokens);
-
   const ValidPill = () => (
     <span className="inline-flex items-center gap-1 font-mono-data-sm text-mono-data-sm text-secondary bg-secondary/10 px-1.5 py-0.5 rounded">
       <span className="h-1.5 w-1.5 rounded-full bg-secondary" />
@@ -286,6 +226,43 @@ export default function FormatComparisonPage() {
       Rejected
     </span>
   );
+
+  const IneligiblePill = () => (
+    <span className="inline-flex items-center gap-1 font-mono-data-sm text-mono-data-sm text-outline bg-outline-variant/20 px-1.5 py-0.5 rounded">
+      <span className="h-1.5 w-1.5 rounded-full bg-outline" />
+      Ineligible
+    </span>
+  );
+
+  const StatusPill = ({ c }: { c: CandidateResult }) => {
+    if (c.valid) return <ValidPill />;
+    if (c.status === 'INELIGIBLE' || !c.eligible) return <IneligiblePill />;
+    return <UnsafePill />;
+  };
+
+  const decisionChip = (c: CandidateResult) => {
+    if (c.valid) {
+      return displayName(c.format_id) === 'JSON'
+        ? {
+            label: 'Valid (Baseline)',
+            cls: 'bg-surface-container-high text-on-surface',
+          }
+        : {
+            label: 'Valid Candidate',
+            cls: 'bg-primary text-on-primary font-bold',
+          };
+    }
+    if (c.status === 'INELIGIBLE' || !c.eligible) {
+      return {
+        label: 'Ineligible',
+        cls: 'bg-surface-container-high text-on-surface-variant',
+      };
+    }
+    return {
+      label: `Rejected (${c.rejection_reason ?? 'Type Mismatch'})`,
+      cls: 'bg-error-container text-on-error-container font-semibold',
+    };
+  };
 
   return (
     <>
@@ -314,6 +291,18 @@ export default function FormatComparisonPage() {
               </span>
 
               <DataSourceBadge state={badgeState} label={badgeLabel} />
+
+              <button
+                onClick={runComparison}
+                disabled={fetchState === 'loading'}
+                className="flex items-center gap-1 px-space-sm py-space-2xs rounded bg-surface-container-low text-secondary font-mono-data-sm text-mono-data-sm cursor-pointer hover:bg-surface-container-high transition-colors disabled:opacity-50"
+                title="Serialize the sample payload against all formats"
+              >
+                <span className="material-symbols-outlined text-[14px]">
+                  {fetchState === 'loading' ? 'progress_activity' : 'sync_alt'}
+                </span>
+                {fetchState === 'loading' ? 'Running…' : '⟳ Run Comparison'}
+              </button>
             </div>
 
             <h1 className="font-headline-xl text-headline-xl text-on-surface tracking-tight">
@@ -392,7 +381,7 @@ export default function FormatComparisonPage() {
               </span>
 
               <span>
-                {validCount}/5 Candidates Sound
+                {validCount}/{displayCandidates.length} Candidates Sound
               </span>
             </div>
           </div>
@@ -404,344 +393,115 @@ export default function FormatComparisonPage() {
       {/* ========================================================= */}
 
       <div className="px-space-lg pb-space-lg">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-space-md">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-space-md">
+          {displayCandidates.map((c, i) => {
+            const meta = metaFor(c.format_id);
+            const tokens = c.estimated_tokens;
+            const delta = deltaPct(tokens);
+            const isJson = displayName(c.format_id) === 'JSON';
+            const rejected = !c.valid && c.status !== 'INELIGIBLE' && c.eligible !== false;
 
-          {/* JSON */}
+            return (
+              <div
+                key={c.format_id}
+                className="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between relative transition-all duration-200 hover:bg-surface-container"
+              >
+                <div className="flex flex-col gap-space-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-label-caps text-label-caps uppercase text-outline">
+                      FORMAT {String(i + 1).padStart(2, '0')}
+                    </span>
 
-          <div className="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between relative transition-all duration-200 hover:bg-surface-container">
-            <div className="flex flex-col gap-space-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-label-caps text-label-caps uppercase text-outline">
-                  FORMAT 01
-                </span>
+                    <StatusPill c={c} />
+                  </div>
 
-                {jsonCand.valid ? (
-                  <ValidPill />
-                ) : (
-                  <UnsafePill />
-                )}
-              </div>
-
-              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-                JSON <BackfillRefTag ids={ALIASES.JSON} />
-              </span>
-
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">
-                Canonical baseline spec
-              </span>
-            </div>
-
-            <div className="my-space-md py-space-xs bg-surface-container-lowest/60 rounded px-space-xs flex items-baseline justify-between">
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">
-                Token Footprint
-              </span>
-
-              <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">
-                {jsonTokens}{' '}
-                <span className="text-body-sm font-normal text-outline">
-                  tok
-                </span>
-              </span>
-            </div>
-
-            <div className="space-y-space-2xs pt-space-xs">
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Delta vs Baseline
-                </span>
-
-                <span className="text-outline font-semibold">
-                  0% Baseline
-                </span>
-              </div>
-
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Pipeline Latency
-                </span>
-
-                <span className="text-on-surface">
-                  {formatLatency(
-                    jsonCand.pipeline_latency_ms
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* COMPACT JSON */}
-
-          <div className="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between relative transition-all duration-200 hover:bg-surface-container">
-            <div className="flex flex-col gap-space-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-label-caps text-label-caps uppercase text-outline">
-                  FORMAT 02
-                </span>
-
-                {compactCand.valid ? (
-                  <ValidPill />
-                ) : (
-                  <UnsafePill />
-                )}
-              </div>
-
-              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-                Compact JSON <BackfillRefTag ids={ALIASES['COMPACT JSON']} />
-              </span>
-
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">
-                Deterministic whitespace stripping
-              </span>
-            </div>
-
-            <div className="my-space-md py-space-xs bg-surface-container-lowest/60 rounded px-space-xs flex items-baseline justify-between">
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">
-                Token Footprint
-              </span>
-
-              <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">
-                {compactTokens}{' '}
-                <span className="text-body-sm font-normal text-outline">
-                  tok
-                </span>
-              </span>
-            </div>
-
-            <div className="space-y-space-2xs pt-space-xs">
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Delta vs Baseline
-                </span>
-
-                <span className="text-secondary font-semibold">
-                  {compactDelta}% Reduction
-                </span>
-              </div>
-
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Pipeline Latency
-                </span>
-
-                <span className="text-on-surface">
-                  {formatLatency(
-                    compactCand.pipeline_latency_ms
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* TOON */}
-
-          <div className="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between relative transition-all duration-200 hover:bg-surface-container">
-            <div className="flex flex-col gap-space-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-label-caps text-label-caps uppercase text-outline">
-                  FORMAT 03
-                </span>
-
-                {toonCand.valid ? (
-                  <ValidPill />
-                ) : (
-                  <UnsafePill />
-                )}
-              </div>
-
-              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-                TOON <BackfillRefTag ids={ALIASES.TOON} />
-              </span>
-
-              <span className="font-mono-data-sm text-mono-data-sm text-outline-variant">
-                Tabular-oriented notation
-              </span>
-            </div>
-
-            <div className="my-space-md py-space-xs bg-surface-container-lowest/60 rounded px-space-xs flex items-baseline justify-between">
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">
-                Token Footprint
-              </span>
-
-              {toonCand.valid ? (
-                <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">
-                  {toonTokens}{' '}
-                  <span className="text-body-sm font-normal text-outline">
-                    tok
+                  <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
+                    {displayName(c.format_id)}
                   </span>
-                </span>
-              ) : (
-                <span className="font-mono-data-lg text-mono-data-lg text-error line-through font-semibold">
-                  {toonTokens}{' '}
-                  <span className="text-body-sm font-normal text-error/70">
-                    tok
+
+                  <span className="font-mono-data-sm text-mono-data-sm text-outline-variant">
+                    {meta ? meta.desc : 'Structural representation'}
                   </span>
-                </span>
-              )}
-            </div>
+                </div>
 
-            <div className="space-y-space-2xs pt-space-xs">
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Schema Validity
-                </span>
+                <div className="my-space-md py-space-xs bg-surface-container-lowest/60 rounded px-space-xs flex items-baseline justify-between">
+                  <span className="font-mono-data-sm text-mono-data-sm text-outline">
+                    Token Footprint
+                  </span>
 
-                <span className="text-error font-semibold">
-                  {toonCand.valid
-                    ? 'Qualified'
-                    : 'Disqualified'}
-                </span>
-              </div>
-
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Pipeline Latency
-                </span>
-
-                <span className="text-on-surface">
-                  {formatLatency(
-                    toonCand.pipeline_latency_ms
+                  {rejected ? (
+                    <span className="font-mono-data-lg text-mono-data-lg text-error line-through font-semibold">
+                      {tokens ?? '—'}{' '}
+                      <span className="text-body-sm font-normal text-error/70">
+                        tok
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">
+                      {tokens ?? '—'}{' '}
+                      <span className="text-body-sm font-normal text-outline">
+                        tok
+                      </span>
+                    </span>
                   )}
-                </span>
-              </div>
+                </div>
 
-              {!toonCand.valid &&
-                toonCand.rejection_reason && (
-                  <p className="font-mono-data-sm text-mono-data-sm text-error/80 pt-1 text-[10px] leading-tight">
-                    Reason: {toonCand.rejection_reason}
-                  </p>
-                )}
-            </div>
-          </div>
+                <div className="space-y-space-2xs pt-space-xs">
+                  <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
+                    <span className="text-outline">
+                      Delta vs Baseline
+                    </span>
 
-          {/* JTON */}
+                    <span
+                      className={
+                        isJson
+                          ? 'text-outline font-semibold'
+                          : delta === null
+                          ? 'text-outline'
+                          : delta >= 0
+                          ? 'text-secondary font-semibold'
+                          : 'text-on-surface font-semibold'
+                      }
+                    >
+                      {isJson
+                        ? '0% Baseline'
+                        : delta === null
+                        ? '—'
+                        : `${delta}% ${delta >= 0 ? 'Reduction' : 'Increase'}`}
+                    </span>
+                  </div>
 
-          <div className="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between relative transition-all duration-200 hover:bg-surface-container">
-            <div className="flex flex-col gap-space-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-label-caps text-label-caps uppercase text-outline">
-                  FORMAT 04
-                </span>
+                  <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
+                    <span className="text-outline">
+                      Pipeline Latency
+                    </span>
 
-                {jtonCand.valid ? (
-                  <ValidPill />
-                ) : (
-                  <UnsafePill />
-                )}
-              </div>
+                    <span className="text-on-surface">
+                      {formatLatency(
+                        c.pipeline_latency_ms
+                      )}
+                    </span>
+                  </div>
 
-              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-                JTON <BackfillRefTag ids={ALIASES.JTON} />
-              </span>
+                  <div className="flex justify-between gap-2 font-mono-data-sm text-mono-data-sm">
+                    <span className="text-outline shrink-0">
+                      Encoded
+                    </span>
 
-              <span className="font-mono-data-sm text-mono-data-sm text-outline-variant">
-                Tuple syntax optimized
-              </span>
-            </div>
+                    <span className={`text-right truncate ${c.encoded !== null ? 'text-on-surface-variant' : 'text-outline-variant'}`}>
+                      {c.encoded !== null ? c.encoded : 'Not provided'}
+                    </span>
+                  </div>
 
-            <div className="my-space-md py-space-xs bg-surface-container-lowest/60 rounded px-space-xs flex items-baseline justify-between">
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">
-                Token Footprint
-              </span>
-
-              <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">
-                {jtonTokens}{' '}
-                <span className="text-body-sm font-normal text-outline">
-                  tok
-                </span>
-              </span>
-            </div>
-
-            <div className="space-y-space-2xs pt-space-xs">
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Delta vs Baseline
-                </span>
-
-                <span className="text-secondary font-semibold">
-                  {jtonDelta}% Reduction
-                </span>
-              </div>
-
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm items-center">
-                <span className="text-outline">
-                  Pipeline Latency
-                </span>
-
-                <span className="text-on-surface">
-                  {formatLatency(
-                    jtonCand.pipeline_latency_ms
+                  {rejected && c.rejection_reason && (
+                    <p className="font-mono-data-sm text-mono-data-sm text-error/80 pt-1 text-[10px] leading-tight">
+                      Reason: {c.rejection_reason}
+                    </p>
                   )}
-                </span>
+                </div>
               </div>
-
-              <p className="font-mono-data-sm text-mono-data-sm text-outline pt-1 text-[10px] leading-tight">
-                *High structural complexity penalty
-              </p>
-            </div>
-          </div>
-
-          {/* ONTO */}
-
-          <div className="bg-surface-container-low rounded-xl p-space-md flex flex-col justify-between relative transition-all duration-200 hover:bg-surface-container">
-            <div className="flex flex-col gap-space-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-label-caps text-label-caps uppercase text-outline">
-                  FORMAT 05
-                </span>
-
-                {ontoCand.valid ? (
-                  <ValidPill />
-                ) : (
-                  <UnsafePill />
-                )}
-              </div>
-
-              <span className="font-headline-md text-headline-md text-on-surface flex items-center gap-2">
-                ONTO <BackfillRefTag ids={ALIASES.ONTO} />
-              </span>
-
-              <span className="font-mono-data-sm text-mono-data-sm text-outline-variant">
-                Object graph notation
-              </span>
-            </div>
-
-            <div className="my-space-md py-space-xs bg-surface-container-lowest/60 rounded px-space-xs flex items-baseline justify-between">
-              <span className="font-mono-data-sm text-mono-data-sm text-outline">
-                Token Footprint
-              </span>
-
-              <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">
-                {ontoTokens}{' '}
-                <span className="text-body-sm font-normal text-outline">
-                  tok
-                </span>
-              </span>
-            </div>
-
-            <div className="space-y-space-2xs pt-space-xs">
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Delta vs Baseline
-                </span>
-
-                <span className="text-secondary font-semibold">
-                  {ontoDelta}% Reduction
-                </span>
-              </div>
-
-              <div className="flex justify-between font-mono-data-sm text-mono-data-sm">
-                <span className="text-outline">
-                  Pipeline Latency
-                </span>
-
-                <span className="text-on-surface">
-                  {formatLatency(
-                    ontoCand.pipeline_latency_ms
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </div>
 
@@ -763,10 +523,12 @@ export default function FormatComparisonPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-space-sm font-mono-data-sm text-mono-data-sm">
-              <span className="flex items-center gap-1.5 text-on-surface">
-                <span className="w-3 h-3 rounded-sm bg-primary" />
-                Optimal Valid
-              </span>
+              {isReference && (
+                <span className="flex items-center gap-1.5 text-on-surface">
+                  <span className="w-3 h-3 rounded-sm bg-primary" />
+                  Optimal Valid
+                </span>
+              )}
 
               <span className="flex items-center gap-1.5 text-on-surface-variant">
                 <span className="w-3 h-3 rounded-sm bg-surface-container-highest" />
@@ -927,192 +689,68 @@ export default function FormatComparisonPage() {
                 y2="210"
               />
 
-              {/* JSON */}
+              {/* Bars — one per returned candidate (reference only when pre-run) */}
 
-              <g className="cursor-pointer group">
-                <rect
-                  className="transition-opacity hover:opacity-85"
-                  fill="#31353e"
-                  height={jsonBar.h}
-                  rx="2"
-                  width="80"
-                  x="90"
-                  y={jsonBar.y}
-                />
+              {displayCandidates.map((c, i) => {
+                const tokens = c.estimated_tokens;
+                const bh = tokens !== null ? bar(tokens) : { h: 3, y: 207, labelY: 197 };
+                const x = 90 + i * 140;
+                const cx = x + 40;
+                const rejected = !c.valid && c.status !== 'INELIGIBLE' && c.eligible !== false;
+                const ineligible = c.status === 'INELIGIBLE' || c.eligible === false;
+                const showStar = isReference && displayName(c.format_id) === 'Compact JSON';
+                const fill = rejected
+                  ? 'url(#rejectedStripes)'
+                  : showStar
+                  ? 'url(#selectedGlow)'
+                  : '#31353e';
+                const labelFill = rejected
+                  ? '#ffb4ab'
+                  : showStar
+                  ? '#adc6ff'
+                  : '#dfe2ee';
 
-                <text
-                  fill="#dfe2ee"
-                  fontFamily="jetbrainsMono"
-                  fontSize="12"
-                  fontWeight="600"
-                  textAnchor="middle"
-                  x="130"
-                  y={jsonBar.labelY}
-                >
-                  {jsonTokens}
-                </text>
+                return (
+                  <g key={c.format_id} className={`cursor-pointer group ${ineligible ? 'opacity-60' : ''}`}>
+                    <rect
+                      className="transition-opacity hover:opacity-85"
+                      fill={fill}
+                      height={bh.h}
+                      rx="2"
+                      stroke={rejected ? '#ffb4ab' : 'none'}
+                      strokeWidth="1"
+                      width="80"
+                      x={x}
+                      y={bh.y}
+                    />
 
-                <text
-                  fill="#8c909f"
-                  fontFamily="jetbrainsMono"
-                  fontSize="11"
-                  textAnchor="middle"
-                  x="130"
-                  y="228"
-                >
-                  JSON
-                </text>
-              </g>
+                    <text
+                      fill={labelFill}
+                      fontFamily="jetbrainsMono"
+                      fontSize="12"
+                      fontWeight={showStar ? '700' : '600'}
+                      textAnchor="middle"
+                      x={cx}
+                      y={bh.labelY}
+                    >
+                      {tokens ?? '—'}
+                      {rejected ? ' (✕)' : ''}
+                      {showStar ? ' ★' : ''}
+                    </text>
 
-              {/* COMPACT */}
-
-              <g className="cursor-pointer group">
-                <rect
-                  fill="url(#selectedGlow)"
-                  height={compactBar.h}
-                  rx="2"
-                  width="80"
-                  x="230"
-                  y={compactBar.y}
-                />
-
-                <text
-                  fill="#adc6ff"
-                  fontFamily="jetbrainsMono"
-                  fontSize="12"
-                  fontWeight="700"
-                  textAnchor="middle"
-                  x="270"
-                  y={compactBar.labelY}
-                >
-                  {compactTokens} ★
-                </text>
-
-                <text
-                  fill="#adc6ff"
-                  fontFamily="jetbrainsMono"
-                  fontSize="11"
-                  fontWeight="600"
-                  textAnchor="middle"
-                  x="270"
-                  y="228"
-                >
-                  COMPACT
-                </text>
-              </g>
-
-              {/* TOON */}
-
-              <g className="cursor-pointer group">
-                <rect
-                  fill="url(#rejectedStripes)"
-                  height={toonBar.h}
-                  rx="2"
-                  stroke="#ffb4ab"
-                  strokeWidth="1"
-                  width="80"
-                  x="370"
-                  y={toonBar.y}
-                />
-
-                <text
-                  fill="#ffb4ab"
-                  fontFamily="jetbrainsMono"
-                  fontSize="12"
-                  fontWeight="600"
-                  textAnchor="middle"
-                  x="410"
-                  y={toonBar.labelY}
-                >
-                  {toonTokens}
-                  {toonCand.valid ? '' : ' (✕)'}
-                </text>
-
-                <text
-                  fill="#ffb4ab"
-                  fontFamily="jetbrainsMono"
-                  fontSize="11"
-                  textAnchor="middle"
-                  x="410"
-                  y="228"
-                >
-                  TOON
-                </text>
-              </g>
-
-              {/* JTON */}
-
-              <g className="cursor-pointer group">
-                <rect
-                  className="transition-opacity hover:opacity-85"
-                  fill="#31353e"
-                  height={jtonBar.h}
-                  rx="2"
-                  width="80"
-                  x="510"
-                  y={jtonBar.y}
-                />
-
-                <text
-                  fill="#dfe2ee"
-                  fontFamily="jetbrainsMono"
-                  fontSize="12"
-                  fontWeight="600"
-                  textAnchor="middle"
-                  x="550"
-                  y={jtonBar.labelY}
-                >
-                  {jtonTokens}
-                </text>
-
-                <text
-                  fill="#8c909f"
-                  fontFamily="jetbrainsMono"
-                  fontSize="11"
-                  textAnchor="middle"
-                  x="550"
-                  y="228"
-                >
-                  JTON
-                </text>
-              </g>
-
-              {/* ONTO */}
-
-              <g className="cursor-pointer group">
-                <rect
-                  className="transition-opacity hover:opacity-85"
-                  fill="#31353e"
-                  height={ontoBar.h}
-                  rx="2"
-                  width="80"
-                  x="650"
-                  y={ontoBar.y}
-                />
-
-                <text
-                  fill="#dfe2ee"
-                  fontFamily="jetbrainsMono"
-                  fontSize="12"
-                  fontWeight="600"
-                  textAnchor="middle"
-                  x="690"
-                  y={ontoBar.labelY}
-                >
-                  {ontoTokens}
-                </text>
-
-                <text
-                  fill="#8c909f"
-                  fontFamily="jetbrainsMono"
-                  fontSize="11"
-                  textAnchor="middle"
-                  x="690"
-                  y="228"
-                >
-                  ONTO
-                </text>
-              </g>
+                    <text
+                      fill={rejected ? '#ffb4ab' : '#8c909f'}
+                      fontFamily="jetbrainsMono"
+                      fontSize="11"
+                      textAnchor="middle"
+                      x={cx}
+                      y="228"
+                    >
+                      {displayName(c.format_id).toUpperCase()}
+                    </text>
+                  </g>
+                );
+              })}
             </svg>
           </div>
 
@@ -1129,10 +767,7 @@ export default function FormatComparisonPage() {
 
             <span className="text-on-surface-variant">
               Compression Efficiency Ratio:{' '}
-              {compactTokens > 0
-                ? (jsonTokens / compactTokens).toFixed(2)
-                : 'N/A'}
-              x vs Baseline
+              {compressionRatio} x vs Baseline
             </span>
           </div>
         </div>
@@ -1165,7 +800,7 @@ export default function FormatComparisonPage() {
                   </span>
 
                   <span className="font-mono-data-sm text-mono-data-sm text-outline px-1.5 py-0.5 rounded bg-surface-container-highest">
-                    {candidates.length} Records
+                    {displayCandidates.length} Records
                   </span>
                 </div>
 
@@ -1240,315 +875,112 @@ export default function FormatComparisonPage() {
               </thead>
 
               <tbody className="divide-y divide-transparent">
+                {displayCandidates.map((c) => {
+                  const ineligible = c.status === 'INELIGIBLE' || c.eligible === false;
+                  const decision = decisionChip(c);
+                  const name = displayName(c.format_id);
 
-                {/* JSON */}
+                  return (
+                    <tr
+                      key={c.format_id}
+                      className={`transition-colors ${
+                        ineligible
+                          ? 'hover:bg-surface-container/50'
+                          : c.valid
+                          ? 'hover:bg-surface-container/50'
+                          : 'bg-error/5 hover:bg-error/10'
+                      }`}
+                    >
+                      <td className="py-space-sm px-space-md font-semibold text-on-surface flex items-center gap-2">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            ineligible
+                              ? 'bg-outline'
+                              : c.valid
+                              ? 'bg-secondary'
+                              : 'bg-error'
+                          }`}
+                        />
+                        {name}
+                      </td>
 
-                <tr className="hover:bg-surface-container/50 transition-colors">
-                  <td className="py-space-sm px-space-md font-semibold text-on-surface flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-outline" />
-                    JSON
-                  </td>
+                      <td className="py-space-sm px-space-sm text-on-surface-variant">
+                        {c.eligible ? 'Yes' : 'No'}
+                      </td>
 
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {jsonCand.eligible ? 'Yes' : 'No'}
-                  </td>
+                      <td className="py-space-sm px-space-sm text-on-surface-variant">
+                        {c.encoded !== null ? (
+                          <code className="text-outline-variant truncate block max-w-[180px]">
+                            {c.encoded}
+                          </code>
+                        ) : (
+                          'Not provided'
+                        )}
+                      </td>
 
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {jsonCand.encoded !== null
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
+                      <td className="py-space-sm px-space-sm text-on-surface-variant">
+                        {c.valid
+                          ? 'Yes'
+                          : ineligible
+                          ? 'N/A'
+                          : 'No'}
+                      </td>
 
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {jsonCand.valid
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
+                      <td
+                        className={`py-space-sm px-space-sm font-medium ${
+                          ineligible
+                            ? 'text-outline'
+                            : c.valid
+                            ? 'text-secondary'
+                            : 'text-error'
+                        }`}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">
+                            {ineligible
+                              ? 'block'
+                              : c.valid
+                              ? 'check'
+                              : 'close'}
+                          </span>
 
-                  <td className="py-space-sm px-space-sm text-secondary font-medium">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">
-                        {jsonCand.valid
-                          ? 'check'
-                          : 'close'}
-                      </span>
-
-                      {jsonCand.valid
-                        ? 'Passed'
-                        : 'Failed'}
-                    </span>
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface font-semibold">
-                    {jsonTokens}
-                  </td>
-
-                  <td className="py-space-sm px-space-md text-right">
-                    <span className="inline-flex items-center px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm bg-surface-container-high text-on-surface">
-                      {jsonCand.valid
-                        ? 'Valid (Baseline)'
-                        : `Rejected (${
-                            jsonCand.rejection_reason ??
-                            'Baseline Mismatch'
-                          })`}
-                    </span>
-                  </td>
-                </tr>
-
-                {/* Compact JSON */}
-
-                <tr className="bg-primary/5 hover:bg-primary/10 transition-colors">
-                  <td className="py-space-sm px-space-md font-bold text-primary flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Compact JSON
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-primary">
-                    {compactCand.eligible
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-primary">
-                    {compactCand.encoded !== null
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-primary">
-                    {compactCand.valid
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-secondary font-semibold">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">
-                        {compactCand.valid
-                          ? 'check'
-                          : 'close'}
-                      </span>
-
-                      {compactCand.valid
-                        ? 'Passed'
-                        : 'Failed'}
-                    </span>
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-primary font-bold">
-                    {compactTokens}
-                  </td>
-
-                  <td className="py-space-sm px-space-md text-right">
-                    {compactCand.valid ? (
-                      <span className="inline-flex items-center gap-1 px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm bg-primary text-on-primary font-bold">
-                        <span className="material-symbols-outlined text-[12px]">
-                          verified
+                          {ineligible
+                            ? 'Skipped'
+                            : c.valid
+                            ? 'Passed'
+                            : 'Failed'}
                         </span>
+                      </td>
 
-                        Valid Candidate
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm bg-error-container text-on-error-container font-semibold">
-                        <span className="material-symbols-outlined text-[12px]">
-                          cancel
+                      <td className="py-space-sm px-space-sm text-on-surface font-semibold">
+                        {c.estimated_tokens ?? '—'}
+                      </td>
+
+                      <td className="py-space-sm px-space-md text-right">
+                        <span
+                          className={`inline-flex items-center gap-1 px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm ${decision.cls}`}
+                        >
+                          {c.valid && (
+                            <span className="material-symbols-outlined text-[12px]">
+                              verified
+                            </span>
+                          )}
+                          {ineligible && (
+                            <span className="material-symbols-outlined text-[12px]">
+                              block
+                            </span>
+                          )}
+                          {!c.valid && !ineligible && (
+                            <span className="material-symbols-outlined text-[12px]">
+                              cancel
+                            </span>
+                          )}
+                          {decision.label}
                         </span>
-
-                        Rejected (
-                        {compactCand.rejection_reason ??
-                          'Type Mismatch'}
-                        )
-                      </span>
-                    )}
-                  </td>
-                </tr>
-
-                {/* TOON */}
-
-                <tr className="bg-error/5 hover:bg-error/10 transition-colors">
-                  <td className="py-space-sm px-space-md font-semibold text-error flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-error" />
-                    TOON
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {toonCand.eligible
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {toonCand.encoded !== null
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {toonCand.valid
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-error font-medium">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">
-                        {toonCand.valid
-                          ? 'check'
-                          : 'close'}
-                      </span>
-
-                      {toonCand.valid
-                        ? 'Passed'
-                        : 'Failed'}
-                    </span>
-                  </td>
-
-                  <td
-                    className={
-                      toonCand.valid
-                        ? 'py-space-sm px-space-sm text-on-surface font-semibold'
-                        : 'py-space-sm px-space-sm text-error/80 line-through'
-                    }
-                  >
-                    {toonTokens}
-                  </td>
-
-                  <td className="py-space-sm px-space-md text-right">
-                    {toonCand.valid ? (
-                      <span className="inline-flex items-center gap-1 px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm bg-secondary/10 text-secondary font-semibold">
-                        <span className="material-symbols-outlined text-[12px]">
-                          verified
-                        </span>
-
-                        Valid Candidate
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm bg-error-container text-on-error-container font-semibold">
-                        <span className="material-symbols-outlined text-[12px]">
-                          cancel
-                        </span>
-
-                        Rejected (
-                        {toonCand.rejection_reason ??
-                          'Type Mismatch'}
-                        )
-                      </span>
-                    )}
-                  </td>
-                </tr>
-
-                {/* JTON */}
-
-                <tr className="hover:bg-surface-container/50 transition-colors">
-                  <td className="py-space-sm px-space-md font-semibold text-on-surface flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-outline" />
-                    JTON
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {jtonCand.eligible
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {jtonCand.encoded !== null
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {jtonCand.valid
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-secondary font-medium">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">
-                        {jtonCand.valid
-                          ? 'check'
-                          : 'close'}
-                      </span>
-
-                      {jtonCand.valid
-                        ? 'Passed'
-                        : 'Failed'}
-                    </span>
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface font-semibold">
-                    {jtonTokens}
-                  </td>
-
-                  <td className="py-space-sm px-space-md text-right">
-                    <span className="inline-flex items-center px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm bg-surface-container-high text-on-surface-variant">
-                      {jtonCand.valid
-                        ? 'Valid Candidate'
-                        : `Rejected (${
-                            jtonCand.rejection_reason ??
-                            'Type Mismatch'
-                          })`}
-                    </span>
-                  </td>
-                </tr>
-
-                {/* ONTO */}
-
-                <tr className="hover:bg-surface-container/50 transition-colors">
-                  <td className="py-space-sm px-space-md font-semibold text-on-surface flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-outline" />
-                    ONTO
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {ontoCand.eligible
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {ontoCand.encoded !== null
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface-variant">
-                    {ontoCand.valid
-                      ? 'Yes'
-                      : 'No'}
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-secondary font-medium">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">
-                        {ontoCand.valid
-                          ? 'check'
-                          : 'close'}
-                      </span>
-
-                      {ontoCand.valid
-                        ? 'Passed'
-                        : 'Failed'}
-                    </span>
-                  </td>
-
-                  <td className="py-space-sm px-space-sm text-on-surface font-semibold">
-                    {ontoTokens}
-                  </td>
-
-                  <td className="py-space-sm px-space-md text-right">
-                    <span className="inline-flex items-center px-space-xs py-0.5 rounded font-mono-data-sm text-mono-data-sm bg-surface-container-high text-on-surface-variant">
-                      {ontoCand.valid
-                        ? 'Valid Candidate'
-                        : `Rejected (${
-                            ontoCand.rejection_reason ??
-                            'Type Mismatch'
-                          })`}
-                    </span>
-                  </td>
-                </tr>
-
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

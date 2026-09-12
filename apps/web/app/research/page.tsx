@@ -45,10 +45,7 @@ export default function ResearchPage() {
         <div className="space-y-space-2xs min-w-0">
           <div className="flex items-center gap-space-xs">
             <span className="font-label-caps text-label-caps uppercase text-secondary bg-surface-container-high px-space-xs py-0.5 rounded shadow-sm">
-              Peer Review Preprint
-            </span>
-            <span className="font-mono-data-sm text-mono-data-sm text-outline">
-              DOC-ID: ACE-PPR-2024.08
+              Research Preprint
             </span>
           </div>
           <h1 className="font-headline-xl text-headline-xl text-on-surface tracking-tight">
@@ -69,7 +66,7 @@ export default function ResearchPage() {
               description
             </span>
             <span className="font-mono-data-sm text-mono-data-sm text-primary">
-              arXiv:2408.0124 [cs.AI, cs.SE]
+              Cite: BibTeX
             </span>
             <span className="material-symbols-outlined text-[14px] text-outline group-hover:translate-x-0.5 transition-transform">
               arrow_forward
@@ -86,13 +83,13 @@ export default function ResearchPage() {
           <div className="space-y-space-sm max-w-4xl">
             <div className="flex flex-wrap items-center gap-space-xs">
               <span className="px-space-xs py-0.5 rounded bg-surface-container text-secondary font-mono-data-sm text-mono-data-sm">
-                Conference Submission · 2024
+                TOONFORGE Evaluation
               </span>
               <span className="px-space-xs py-0.5 rounded bg-surface-container text-on-surface-variant font-mono-data-sm text-mono-data-sm">
                 Empirical Evaluation Track
               </span>
               <span className="px-space-xs py-0.5 rounded bg-surface-container text-primary font-mono-data-sm text-mono-data-sm">
-                Code: Reproducible Artifact v2.4
+                Code: Reproducible Artifact
               </span>
             </div>
             <h2 className="font-headline-xl text-headline-xl text-on-surface tracking-tight">
@@ -139,13 +136,13 @@ export default function ResearchPage() {
               </div>
               <div className="p-space-xs rounded bg-surface-container/60 shadow-sm">
                 <div className="font-label-caps text-label-caps text-outline uppercase">
-                  Learned Latency
+                  Learned Router
                 </div>
                 <div className="font-headline-lg text-headline-lg text-on-surface font-semibold tracking-tight">
-                  ~0.3ms
+                  ≈3.2–3.9×
                 </div>
                 <div className="font-body-sm text-body-sm text-on-surface-variant">
-                  Tree Classifier P99
+                  Speedup vs exhaustive (observed)
                 </div>
               </div>
               <div className="p-space-xs rounded bg-surface-container/60 shadow-sm">
@@ -156,7 +153,7 @@ export default function ResearchPage() {
                   N=200
                 </div>
                 <div className="font-body-sm text-body-sm text-on-surface-variant">
-                  Production Archetypes
+                  Synthetic Archetypes (seed=200)
                 </div>
               </div>
             </div>
@@ -169,7 +166,7 @@ export default function ResearchPage() {
                 Ablation Distribution
               </span>
               <span className="font-mono-data-sm text-mono-data-sm text-secondary">
-                p &lt; 0.001
+                N=200 · seed=200
               </span>
             </div>
             {/* Visual Distribution Chart Inline SVG */}
@@ -304,7 +301,7 @@ export default function ResearchPage() {
                 <span className="material-symbols-outlined text-[14px]">
                   trending_up
                 </span>
-                Context Bloat: +42% to +180%
+                Structural Token Overhead
               </span>
               <span>JSON/YAML Overhead</span>
             </div>
@@ -330,7 +327,7 @@ export default function ResearchPage() {
                 2. Research Gap
               </h3>
               <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-                Existing research assumes a single format (JSON or TOON) is
+                Prior work commonly assumes a single format (JSON or TOON) is
                 universally superior. In practice, no single compact format is
                 optimal across all payload shapes without semantic breakage.
               </p>
@@ -402,9 +399,10 @@ export default function ResearchPage() {
                 4. Core Contribution
               </h3>
               <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-                The first reliability-first adaptive router that delivers an
+                A reliability-first adaptive router that delivers an
                 average of 46.26% token reduction over raw JSON while maintaining
-                100% semantic fidelity across diverse payload archetypes.
+                100% semantic fidelity on the canonical synthetic corpus
+                (N=200, seed=200).
               </p>
             </div>
             <div className="pt-space-md mt-space-md flex items-center justify-between font-mono-data-sm text-mono-data-sm text-outline">
@@ -480,11 +478,11 @@ export default function ResearchPage() {
             </h4>
             <p className="font-body-md text-body-md text-on-surface-variant">
               Benchmark evaluated on 200 parameterized synthetic payloads
-              reflecting realistic API traffic archetypes.
+              (seed=200) reflecting realistic API traffic archetypes.
             </p>
             <div className="pt-space-xs font-mono-data-sm text-mono-data-sm text-outline flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              <span>Uniform Depth [1..9], High-Density Leaf Matrices</span>
+              <span>5 categories × 40 samples (flat_tabular · nested_objects · deep_nested · heterogeneous · key_sparse)</span>
             </div>
           </div>
 
@@ -539,7 +537,7 @@ export default function ResearchPage() {
                     Speedup Multiplier
                   </div>
                   <div className="font-headline-md text-headline-md text-secondary font-semibold">
-                    ≈3.9× Fast-Path
+                    ≈3.2–3.9×
                   </div>
                 </div>
                 <div className="h-8 w-[1px] bg-surface-container-highest" />
@@ -558,8 +556,8 @@ export default function ResearchPage() {
                 Decision Path:
               </span>
               <span>
-                Feature Vector Extraction (12 dims) → Fast Decision Tree Infer →
-                Fallback to Verification on Ambiguity
+                Structural Profiling → Decision-Tree Inference →
+                Routed Selection (validity-first)
               </span>
             </div>
           </div>
@@ -578,15 +576,15 @@ export default function ResearchPage() {
               Suboptimal Path Handling
             </h4>
             <p className="font-body-md text-body-md text-on-surface-variant">
-              Learned classifier errors bounded to max 2 token regret with zero
-              validity violations.
+              Learned classifier attains zero token regret with zero
+              validity violations on the deterministic synthetic holdout.
             </p>
             <div className="pt-space-xs font-mono-data-sm text-mono-data-sm text-secondary flex items-center gap-1">
               <span className="material-symbols-outlined text-[14px]">
                 check_circle
               </span>
               <span>
-                Loss Metric: Regret ≤ 2 Tokens (99.8th percentile)
+                Loss Metric: 0 Token Regret (100% Holdout Agreement)
               </span>
             </div>
           </div>
@@ -605,7 +603,7 @@ export default function ResearchPage() {
                 BibTeX Citation Spec
               </span>
               <span className="px-space-2xs py-0.5 rounded bg-surface-container-highest text-outline font-mono-data-sm text-mono-data-sm">
-                Conference 2024 Reference
+                Preprint Reference
               </span>
             </div>
             <h3 className="font-headline-md text-headline-md text-on-surface">
@@ -631,14 +629,12 @@ export default function ResearchPage() {
             className="font-mono-data-sm text-mono-data-sm text-on-surface-variant leading-relaxed select-all"
             id="bibtex-text"
           >
-            {`@article{ace_systems_2024_context,
-  title     = {Optimizing LLM Context Windows via Structural Data Serialization},
-  author    = {AI Systems Research Group},
-  journal   = {arXiv preprint arXiv:2408.0124},
-  primaryClass = {cs.AI, cs.SE},
-  year      = {2024},
-  month     = {August},
-  abstract  = {Evaluates adaptive serialization across 200 payload archetypes, achieving 46.26% mean token reduction with 100% round-trip isomorphism.}
+            {`@misc{toonforge_serialization_preprint,
+  title       = {Optimizing LLM Context Windows via Structural Data Serialization},
+  author      = {AI Systems Research Group},
+  howpublished = {Preprint (in preparation)},
+  note        = {No arXiv ID or DOI assigned yet. Companion artifact of the TOONFORGE serialization engine.},
+  abstract    = {Evaluates adaptive serialization across a synthetic 200-payload corpus (seed=200), achieving 46.26% mean token reduction with 100% round-trip validity.}
 }`}
           </pre>
         </div>

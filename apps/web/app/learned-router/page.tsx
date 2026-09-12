@@ -31,13 +31,23 @@ export default function LearnedRouterPage() {
 
   const agreement = prediction.agreement !== false ? 'MATCH' : 'DIVERGED';
   const confidence = `${(prediction.confidence * 100).toFixed(1)}%`;
+  const fv = prediction.feature_vector ?? {};
 
-  const dataState = loading
+  const FEATURE_ROWS = [
+    { key: 'max_depth', label: 'AST Max Depth', ref: 4, fmt: (v: number) => v.toFixed(0), accent: 'text-primary' },
+    { key: 'record_count', label: 'Record Count', ref: 24, fmt: (v: number) => v.toFixed(0), accent: 'text-primary' },
+    { key: 'schema_uniformity', label: 'Schema Uniformity', ref: 0.82, fmt: (v: number) => v.toFixed(2), accent: 'text-secondary' },
+    { key: 'key_repetition_ratio', label: 'Key Repetition', ref: 0.88, fmt: (v: number) => v.toFixed(2), accent: 'text-secondary' },
+    { key: 'heterogeneity_index', label: 'Heterogeneity Index', ref: 0.18, fmt: (v: number) => v.toFixed(2), accent: 'text-tertiary' },
+    { key: 'scalar_object_ratio', label: 'Scalar / Object Ratio', ref: 3.41, fmt: (v: number) => v.toFixed(2), accent: 'text-on-surface' },
+  ] as const;
+
+  const dataState = apiError
+    ? 'error'
+    : loading
     ? 'loading'
     : hasPredicted
     ? 'live'
-    : apiError
-    ? 'error'
     : 'idle';
 
   const dataStateLabel =
@@ -60,8 +70,6 @@ export default function LearnedRouterPage() {
       setHasPredicted(true);
       setPrediction(res);
     } catch (err) {
-      console.error('Learned router predict error:', err);
-
       setApiError(
         err instanceof Error ? err.message : 'Unexpected API error.'
       );
@@ -71,7 +79,7 @@ export default function LearnedRouterPage() {
   };
 
   return (
-    <main className="w-full pt-16 bg-surface flex-1 relative w-full overflow-hidden">
+    <main className="w-full pt-16 bg-surface flex-1 relative">
       <div className="relative w-full overflow-hidden">
         <ApiErrorBanner
           message={apiError}
@@ -298,7 +306,12 @@ export default function LearnedRouterPage() {
               </div>
               <div className="flex items-center gap-space-xs">
                 <span className="font-mono-data-sm text-mono-data-sm text-outline">SAMPLE ID:</span>
-                <span className="font-mono-data-sm text-mono-data-sm px-space-xs py-0.5 rounded bg-surface-container font-semibold text-primary">SYNTH_STRUCT_#4491</span>
+                <span className="font-mono-data-sm text-mono-data-sm px-space-xs py-0.5 rounded bg-surface-container font-semibold text-primary">
+                  {hasPredicted ? 'LIVE_ROUTE' : 'REFERENCE_EXAMPLE'}
+                </span>
+                {!hasPredicted && (
+                  <span className="font-mono-data-sm text-mono-data-sm text-outline">(pre-run)</span>
+                )}
               </div>
             </div>
             {/* 3-Stage Pipeline Diagram */}
@@ -307,33 +320,21 @@ export default function LearnedRouterPage() {
               <div className="lg:col-span-4 rounded-lg bg-surface-container p-space-md flex flex-col gap-space-sm">
                 <div className="flex items-center justify-between">
                   <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">STAGE 01 · EXTRACTION</span>
-                  <span className="font-mono-data-sm text-mono-data-sm text-secondary">6 FEATURES</span>
+                  <span className="font-mono-data-sm text-mono-data-sm text-secondary">
+                    {hasPredicted ? '6 FEATURES · LIVE' : '6 FEATURES · REFERENCE'}
+                  </span>
                 </div>
                 <div className="space-y-space-xs">
-                  <div className="p-space-xs rounded bg-surface-container-lowest flex items-center justify-between">
-                    <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">AST Max Depth</span>
-                    <span className="font-mono-data-lg text-mono-data-lg text-primary font-semibold">4</span>
-                  </div>
-                  <div className="p-space-xs rounded bg-surface-container-lowest flex items-center justify-between">
-                    <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Record Count</span>
-                    <span className="font-mono-data-lg text-mono-data-lg text-primary font-semibold">24</span>
-                  </div>
-                  <div className="p-space-xs rounded bg-surface-container-lowest flex items-center justify-between">
-                    <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Schema Uniformity</span>
-                    <span className="font-mono-data-lg text-mono-data-lg text-secondary font-semibold">0.82</span>
-                  </div>
-                  <div className="p-space-xs rounded bg-surface-container-lowest flex items-center justify-between">
-                    <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Key Repetition</span>
-                    <span className="font-mono-data-lg text-mono-data-lg text-secondary font-semibold">0.88</span>
-                  </div>
-                  <div className="p-space-xs rounded bg-surface-container-lowest flex items-center justify-between">
-                    <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Heterogeneity Index</span>
-                    <span className="font-mono-data-lg text-mono-data-lg text-tertiary font-semibold">0.18</span>
-                  </div>
-                  <div className="p-space-xs rounded bg-surface-container-lowest flex items-center justify-between">
-                    <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Scalar / Object Ratio</span>
-                    <span className="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">3.41</span>
-                  </div>
+                  {FEATURE_ROWS.map((row) => {
+                    const v = fv[row.key];
+                    const value = v !== undefined && v !== null ? row.fmt(v) : row.fmt(row.ref);
+                    return (
+                      <div key={row.key} className="p-space-xs rounded bg-surface-container-lowest flex items-center justify-between">
+                        <span className="font-mono-data-sm text-mono-data-sm text-on-surface-variant">{row.label}</span>
+                        <span className={`font-mono-data-lg text-mono-data-lg font-semibold ${row.accent}`}>{value}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               {/* Connector Graphic (Mobile: Down, Desktop: Right) */}
@@ -402,7 +403,9 @@ export default function LearnedRouterPage() {
               <div className="lg:col-span-2 rounded-lg bg-surface-container p-space-md flex flex-col justify-between items-center text-center">
                 <div className="w-full flex items-center justify-between">
                   <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">STAGE 03</span>
-                  <span className="font-label-caps text-label-caps px-space-2xs py-0.5 rounded bg-secondary/10 text-secondary">FINAL</span>
+                  <span className="font-label-caps text-label-caps px-space-2xs py-0.5 rounded bg-secondary/10 text-secondary">
+                    {hasPredicted ? 'FINAL' : 'FINAL · REFERENCE'}
+                  </span>
                 </div>
                 <div className="my-space-md flex flex-col items-center">
                   <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center text-on-primary shadow-lg mb-space-xs">
@@ -410,7 +413,11 @@ export default function LearnedRouterPage() {
                   </div>
                   <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">PREDICTED FORMAT</span>
                   <span className="font-headline-md text-headline-md text-primary font-bold mt-space-3xs">{prediction.predicted_format}</span>
-                  <span className="font-mono-data-sm text-mono-data-sm text-secondary mt-space-2xs">Loss Penalty: {prediction.token_regret?.toFixed(2) ?? '0.00'} tk</span>
+                  <span className="font-mono-data-sm text-mono-data-sm text-secondary mt-space-2xs">
+                    {hasPredicted
+                      ? `Loss Penalty: ${prediction.token_regret?.toFixed(2) ?? '0.00'} tk · Fidelity ${confidence}`
+                      : 'Reference prediction — not yet run'}
+                  </span>
                 </div>
                 <button
                   onClick={runPrediction}
@@ -430,7 +437,8 @@ export default function LearnedRouterPage() {
             <span className="font-label-caps text-label-caps text-outline uppercase tracking-wider">RUNTIME BENCHMARK CASES</span>
             <h3 className="font-headline-lg text-headline-lg text-on-surface font-semibold">Evaluation Comparison Scenarios</h3>
             <p className="font-body-md text-body-md text-on-surface-variant max-w-3xl">
-              Empirical comparison of runtime format selection between exhaustive brute-force testing and learned predictive decision trees under actual workload distributions.
+              Empirical comparison of runtime format selection between exhaustive brute-force testing and learned predictive decision trees under actual workload distributions.{' '}
+              <span className="text-outline">Cases A/B below are illustrative scenarios, not live measurements.</span>
             </p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-space-md mt-space-xs">
@@ -519,7 +527,7 @@ export default function LearnedRouterPage() {
                 </div>
                 {/* Outcome Metrics Strip */}
                 <div className="mt-space-md p-space-xs rounded bg-surface-container-high flex items-center justify-between font-mono-data-sm text-mono-data-sm">
-                  <span className="text-on-surface-variant">Token Regret: <strong className="text-tertiary font-semibold">+2 tokens (+0.8%)</strong></span>
+                  <span className="text-on-surface-variant">Token Regret: <strong className="text-tertiary font-semibold">+2 tokens (+0.8%)</strong> <span className="text-outline">(illustrative)</span></span>
                   <span className="text-on-surface-variant">Latency Win: <strong className="text-primary font-semibold">-1.68ms (-84%)</strong></span>
                 </div>
               </div>
