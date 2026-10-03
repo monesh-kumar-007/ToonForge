@@ -27,7 +27,13 @@ npx tsc --noEmit -p tsconfig.json   # run from apps/web
 python benchmarks/run_benchmark.py --size 200 --seed 200
 python benchmarks/analyze_results.py --dir benchmarks/results
 python benchmarks/learned_router_eval.py --size 200 --seed 200
-python benchmarks/adversarial_cases.py
+python benchmarks/adversarial_cases.py   # prints only; use run_adversarial_trace.py to persist JSON
+
+# Benchmark evidence scripts (untracked, canonical 200/200); each writes JSON
+python benchmarks/paired_significance.py --size 200 --seed 200
+python benchmarks/run_adversarial_trace.py
+python benchmarks/run_downstream_proxy.py
+python benchmarks/tokenizer_audit.py
 ```
 
 There is **no Python linter/formatter config** and no CI. Verification for any
@@ -35,13 +41,38 @@ numeric or claim change is: full pytest → canonical benchmark rerun → web `t
 
 ## Gotchas
 
+- **Device Guard / AppControl intermittently blocks CPython executables.** In one
+  session every interpreter failed — `.venv\Scripts\python.exe`, the
+  `C:\Users\monis\AppData\Local\Programs\Python\Python314` install, `pythonw.exe`,
+  `py`, and even uv's cached Python (`os error 4551`), all on `--version`. It
+  later worked again, so retry `python --version` once before assuming it is
+  permanently blocked. When blocked, the **Microsoft Store Python 3.11.9** alias
+  still runs: `C:\Users\monis\AppData\Local\Microsoft\WindowsApps\python3.11.exe`
+  (its packages are separate; builds isolated tooling in a throwaway venv). Temp
+  dirs are wiped between sessions — never rely on a path under
+  `C:\Users\monis\AppData\Local\Temp\opencode\`.
+
+- **`benchmarks/adversarial_cases.py` prints a table but never persists JSON**
+  (and omits token counts); **`benchmarks/downstream_proxy.py` is class-only with
+  no runner** (147 lines, ends at `evaluate_payload`). Don't re-discover this —
+  the untracked wrappers `benchmarks/run_adversarial_trace.py` and
+  `benchmarks/run_downstream_proxy.py` call the unchanged suite/proxy and dump
+  full JSON. `benchmarks/paired_significance.py` (per-payload Router-vs-Compact
+  valid-only reductions + Wilcoxon + 95% CI) exists because `run_benchmark.py`
+  has **no raw per-payload mode**. `benchmarks/tokenizer_audit.py` is the
+  cross-tokenizer cl100k self-check. None of these are in any protected list.
+
+- **`FILE_MAP.md` (repo root) documents what every file does** — read it before
+  exploring.
+
 - **`apps/api/models/learned_router.pkl` is a committed binary.** Running the
   test suite or router eval **retrains and overwrites it**. Always
   `git checkout -- apps/api/models/learned_router.pkl` after running tests.
 - **`npx tsc --noEmit` writes `apps/web/tsconfig.tsbuildinfo`** (tsconfig has
   `incremental: true`). It is not gitignored — delete it after typechecking.
-- **`benchmarks/results/raw/run_*.json` and `aggregated/latest.json` are
-  ephemeral outputs**, not tracked inputs. The only canonical tracked artifact is
+- **`benchmarks/results/raw/run_*.json`, `aggregated/latest.json`, and the
+  evidence JSONs from the scripts above are ephemeral outputs**, not tracked
+  inputs. The only canonical tracked artifact is
   `benchmarks/results/benchmark_summary_n200_s200.json`.
 - The `benchmarks/datasets/` dir is empty/absent by design — the corpus is
   generated in-memory on every run (deterministic, seed=200).

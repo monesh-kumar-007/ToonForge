@@ -136,6 +136,24 @@ def evaluate_learned_router(
         "feature_importances": metrics.get("feature_importances", {}),
     }
 
+    # Persist holdout metrics into the .pkl so GET /api/learned-router/metrics
+    # returns full populated fields (latency, regret, exact_match_rate) after a
+    # CLI eval run — not just the training-time fields set by train().
+    learned_router.record_evaluation({
+        "training_corpus_size": corpus_size,
+        "evaluation_corpus_size": len(test_corpus),
+        "exact_match_rate": agg["exact_match_rate"],
+        "mean_token_regret": agg["mean_token_regret"],
+        "median_regret_tokens": agg["median_regret_tokens"],
+        "mean_regret_pct": agg["mean_regret_pct"],
+        "p95_regret_pct": agg["p95_regret_pct"],
+        "invalid_selection_rate": agg["invalid_selection_rate"],
+        "final_fallback_rate": agg["final_fallback_rate"],
+        "learned_latency_ms": avg_lr_lat,
+        "exhaustive_latency_ms": avg_ex_lat,
+        "speedup_factor": speedup,
+    })
+
     print("\n" + "=" * 60)
     print("LEARNED ROUTER EVALUATION RESULTS")
     print("=" * 60)
